@@ -1,3 +1,4 @@
+import { DebtPanels } from "./DebtPanels";
 import { aggregateMarkets } from "./marketAggregate";
 import { campaignAnalysis } from "./analysisClient";
 import { useCountryMarketCenters, useAnalysisHistory } from "./useAnalysisHistory";
@@ -111,6 +112,7 @@ export function SaveHistory({
     },
     [playthroughId, metricState, good, markets, country, indexed],
   );
+  const section = history.section ?? "map";
   const busy = history.progress !== null;
   const metadata = useMemo(
     () =>
@@ -321,7 +323,7 @@ export function SaveHistory({
             <span className={styles.eyebrow}>CAMPAIGN HISTORY</span>
             <h1>
               {focusName ? `${focusName} · ` : ""}
-              {human(mapMode)} over time
+              {section === "debt" ? "Debt & Interest" : `${human(mapMode)} over time`}
             </h1>
             <p>
               {campaign ? `${campaign.saves.length} campaign saves available for navigation. ` : ""}
@@ -333,7 +335,7 @@ export function SaveHistory({
         </header>
         {error ? (
           <p>{error}</p>
-        ) : loading ? (
+        ) : loading && !dates.length ? (
           <p>Loading campaign charts…</p>
         ) : !dates.length ? (
           <section className={styles.empty}>
@@ -347,6 +349,13 @@ export function SaveHistory({
               births, buildings, religion, RGO capacity and markets.
             </p>
           </section>
+        ) : section === "debt" ? (
+          <DebtPanels
+            dates={dates}
+            campaignId={playthroughId ?? ""}
+            selectedHash={currentSnapshot?.hash}
+            visible={visible}
+          />
         ) : (
           <div className={styles.layout}>
             <aside className={styles.panel} aria-label="History filters">

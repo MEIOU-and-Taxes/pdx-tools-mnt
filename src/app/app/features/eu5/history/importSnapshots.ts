@@ -1,12 +1,17 @@
+import { proxy } from "comlink";
 import { createWorkerQueue } from "@/lib/workerQueue";
 import type { WorkerQueue } from "@/lib/workerQueue";
 import { appendAnalysis, campaignAnalysis } from "./analysisClient";
+import type { MapObservation } from "./analysisTypes";
 import type { SnapshotMetadata } from "./types";
 import type { ImportPhaseState } from "./importTiming";
-import type { parseImport } from "./snapshot-worker";
+import type { parseImport, ParseProgress } from "./snapshot-worker";
 export type ImportOptions = {
+  /** Reject duplicate or out-of-scope observations before publishing them. */
+  acceptObservation?: (observation: MapObservation) => boolean;
   signal: AbortSignal;
   concurrency?: number;
+  useCompiledCache?: boolean;
   onSnapshots: (
     snapshots: SnapshotMetadata[],
     sources: { snapshot: SnapshotMetadata; file: File }[],
@@ -20,7 +25,7 @@ export type ImportOptions = {
   /** Files currently assigned to parser workers, including analytical publication. */
   onActiveFiles?: (files: readonly File[]) => void;
 };
-/** Stream normal-parser output into one resident analysis worker, without disk writes. */
+/** Reuse disk-compiled observations, or parse and cache them in bounded workers. */
 export async function importTimeline(files: File[], options: ImportOptions) {
   const { signal } = options;
   type Api = { parseImport: typeof parseImport };
@@ -61,14 +66,15 @@ export async function importTimeline(files: File[], options: ImportOptions) {
     }
     const residentMiB = (await campaignAnalysis().memoryBytes()) / 1024 ** 2;
     const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
-    const budgetMiB = memory * 1024 * 0.65 - 512;
+    const budgetMiB = Math.min(memory * 1024 * 0.5, 8 * 1024) - 512;
+    const cpuWorkers = Math.max(1, Math.floor((navigator.hardwareConcurrency ?? 4) / 2));
     const largest = jobs.reduce((size, file) => Math.max(size, 768 + file.size / 1024 ** 2), 768);
     const capacityFor = (resident: number) =>
       Math.max(
         1,
         Math.min(
           jobs.length,
-          Math.max(1, Math.min(8, options.concurrency ?? 8)),
+          Math.max(1, Math.min(8, options.concurrency ?? cpuWorkers)),
           Math.floor((budgetMiB - resident) / largest),
         ),
       );
@@ -91,10 +97,24 @@ export async function importTimeline(files: File[], options: ImportOptions) {
           try {
             await queue.run(
               async (parser, taskSignal) => {
-                const result = await parser.parseImport(file);
+                const result = await parser.parseImport(
+                  file,
+                  proxy((update: ParseProgress) => {
+                    if (signal.aborted || stopping) return;
+                    phase = {
+                      ...phase,
+                      stage: update.stage,
+                      cacheHits: (phase.cacheHits ?? 0) + (update.cache === "hit" ? 1 : 0),
+                    };
+                    options.onProgress(completed, files.length, file.name, phase);
+                  }),
+                  options.useCompiledCache !== false,
+                );
                 taskSignal.throwIfAborted();
                 signal.throwIfAborted();
                 // Waiting for append bounds unwritten analytical output to the active parser count.
+                if (options.acceptObservation && !options.acceptObservation(result.observation))
+                  return;
                 const descriptor = await appendAnalysis(result);
                 // Once append succeeds the observation is committed, even if cancellation
                 // arrived while the worker was accepting it. Publish that committed result.

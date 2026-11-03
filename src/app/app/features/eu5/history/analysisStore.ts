@@ -118,7 +118,13 @@ export class CampaignAnalysisStore extends MapColumnStore<SaveAnalysis> {
         marketLabels: _labels,
         ...metadata
       } = row;
-      return { ...metadata, marketLabels: {}, countries: country ? [{ ...country }] : [], markets };
+      return {
+        ...metadata,
+        ...(source.debt == null ? {} : { debt: source.debt }),
+        marketLabels: {},
+        countries: country ? [{ ...country }] : [],
+        markets,
+      };
     });
   }
   private world(source: SaveAnalysis["snapshot"]): Snapshot["countries"][number] | undefined {

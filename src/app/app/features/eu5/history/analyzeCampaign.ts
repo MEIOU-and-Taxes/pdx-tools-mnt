@@ -59,6 +59,8 @@ export async function analyzeCampaign(entries: LocalSaveEntry[], playthroughId: 
       sources.map((source) => source.file),
       {
         signal,
+        concurrency: useHistory.getState().analysisWorkers || undefined,
+        useCompiledCache: useHistory.getState().analysisUseCache,
         onActiveFiles: (active) => {
           if (signal.aborted) return;
           const files = new Set(active);

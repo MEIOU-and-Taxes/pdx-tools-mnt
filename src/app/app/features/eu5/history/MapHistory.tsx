@@ -44,6 +44,7 @@ function useMapHistoryState() {
   const store = useEu5Context();
   const engine = useEu5Engine();
   const currentMapMode = useEu5MapMode();
+  const financeActive = useHistory((s) => s.panelOpen && s.section === "debt");
   const campaignId = useEu5PlaythroughId();
   const featureEnabled = useIsCampaignAnalysisEnabled();
   const enabled = useHistory(
@@ -107,21 +108,21 @@ function useMapHistoryState() {
     };
   }, [engine, campaignId, enabled]);
 
-  // Only the political mode has a history in the loaded save, so it shows that save.
+  // Political history normally uses the loaded save; finance instead seeks exact imported observations.
   const followEngine = useEffectEvent(() => {
     // Playback stops when the mode changes, and does not resume on a return.
     if (playingMode !== null && playingMode !== currentMapMode) setPreviewPlayback(null);
-    if (currentMapMode === "political") cancelPreview();
+    if (currentMapMode === "political" && !financeActive) cancelPreview();
     else repaintPreview(engine, currentMapMode);
   });
   useEffect(() => {
     followEngine();
-  }, [engine, currentMapMode]);
+  }, [engine, currentMapMode, financeActive]);
 
   const opening = previewing && preview.kind === "opening";
 
   const move = (next: number) => {
-    if (currentMapMode === "political" || !frames.length || !campaignId) return;
+    if ((currentMapMode === "political" && !financeActive) || !frames.length || !campaignId) return;
     const frame = frames[Math.max(0, Math.min(next, frames.length - 1))];
     engine.trigger.pauseTimeline();
     if (!previewing && frame.hash === loadedHash) return;
@@ -133,10 +134,10 @@ function useMapHistoryState() {
     } else move(index + 1);
   });
   useEffect(() => {
-    if (!playing || currentMapMode === "political") return;
+    if (!playing || (currentMapMode === "political" && !financeActive)) return;
     const timer = setInterval(advance, 500 / speed);
     return () => clearInterval(timer);
-  }, [playing, currentMapMode, speed]);
+  }, [playing, currentMapMode, speed, financeActive]);
 
   const open = useEffectEvent(() => {
     if (campaign) void openPreview(campaign);
@@ -178,7 +179,7 @@ function useMapHistoryState() {
 
   const shown = previewing ? preview.shown : null;
   let controller: TimelineController | null = null;
-  if (enabled && currentMapMode !== "political" && campaignId) {
+  if (enabled && (currentMapMode !== "political" || financeActive) && campaignId) {
     const { start, end } = mapTimelineBounds(
       saveDate,
       frames,

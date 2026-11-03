@@ -10,6 +10,8 @@ import type { SaveAnalysisImport } from "@/wasm/wasm_eu5";
 import wasmUrl from "@/wasm/wasm_eu5_bg.wasm?url";
 import tokenUrl from "../../../../../../assets/tokens/eu5.bin?url";
 import { getBundleUrls, resolveBundleVersion } from "../bundleUrls";
+import { compiledCacheKey, readCompiledAnalysis, writeCompiledAnalysis } from "./analysisCache";
+import { analysisBundleIdentity } from "../bundleUrls";
 import { packSnapshot } from "./packedSnapshot";
 import { packOverviews } from "./packedOverview";
 import { analyticalBuffers } from "./transferBuffers";
@@ -70,7 +72,39 @@ async function loadAssets(version: string) {
   }
 }
 /** Parse one full model, release its arena, and keep the worker reusable. */
-export async function parseImport(file: File): Promise<SaveAnalysis> {
+export type ParseProgress = { stage: string; cache?: "hit" | "miss" | "unavailable" };
+export async function parseImport(
+  file: File,
+  report?: (progress: ParseProgress) => void,
+  useCompiledCache = true,
+): Promise<SaveAnalysis> {
+  let cacheKey: string | undefined;
+  try {
+    if (useCompiledCache) {
+      let last = -1;
+      cacheKey = await compiledCacheKey(
+        file,
+        [wasmUrl, tokenUrl, analysisBundleIdentity()].join("|"),
+        (percent) => {
+          const step = Math.floor(percent / 10);
+          if (step !== last) {
+            last = step;
+            report?.({ stage: `Checking compiled cache · ${percent}%` });
+          }
+        },
+      );
+      const cached = await readCompiledAnalysis(cacheKey);
+      if (cached) {
+        cached.observation.fileName = file.name;
+        cached.snapshot.fileName = file.name;
+        report?.({ stage: "Loaded compiled analysis from disk", cache: "hit" });
+        return transfer(cached, analyticalBuffers(cached));
+      }
+    }
+  } catch {
+    report?.({ stage: "Disk cache unavailable; parsing save", cache: "unavailable" });
+  }
+  report?.({ stage: "Reading save", cache: "miss" });
   await initialize();
   const parser = await ImportLoader.open(file);
   let data: Awaited<ReturnType<typeof assets>> | undefined;
@@ -78,8 +112,10 @@ export async function parseImport(file: File): Promise<SaveAnalysis> {
   try {
     const meta = parser.meta();
     if (!meta.playthroughId) throw Error("Save has no campaign ID");
+    report?.({ stage: "Loading analysis assets" });
     data = await assets(`${meta.version.major}.${meta.version.minor}`);
     consumed = true;
+    report?.({ stage: "Parsing save and building analysis" });
     const raw = parser.parse_import(data.game, data.localization) as SaveAnalysisImport & {
       projection: MapProjection;
     };
@@ -89,6 +125,7 @@ export async function parseImport(file: File): Promise<SaveAnalysis> {
         market.centerName?.replaceAll("_", " ") || `Location ${market.center}`;
     const names =
       raw.countryNames instanceof Map ? Object.fromEntries(raw.countryNames) : raw.countryNames;
+    report?.({ stage: "Packing compiled analysis" });
     const result: SaveAnalysis = {
       observation: {
         hash: `eu5:${raw.hash}`,
@@ -111,6 +148,16 @@ export async function parseImport(file: File): Promise<SaveAnalysis> {
       countryIds: Uint32Array.from(raw.countryIds),
       countryNames: names,
     };
+    if (cacheKey) {
+      report?.({ stage: "Saving compiled analysis to disk" });
+      const saved = await writeCompiledAnalysis(cacheKey, result);
+      report?.({
+        stage: saved
+          ? "Compiled analysis cached on disk"
+          : "Disk cache unavailable or full; analysis ready",
+        ...(saved ? {} : { cache: "unavailable" as const }),
+      });
+    }
     return transfer(result, analyticalBuffers(result));
   } finally {
     if (!consumed) parser.free();

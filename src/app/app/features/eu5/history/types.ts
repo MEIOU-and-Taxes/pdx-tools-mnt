@@ -7,5 +7,5 @@ export type Snapshot = SaveSnapshot & {
   marketLabels: Record<string, string>;
 };
 
-export type SnapshotMetadata = Omit<Snapshot, "countries" | "markets"> &
+export type SnapshotMetadata = Omit<Snapshot, "countries" | "markets" | "debt"> &
   Partial<Pick<MapObservation, "world" | "layoutKey">>;

@@ -223,8 +223,11 @@ export function marketAt(p: PackedSnapshot, index: number): Market {
   if (traded != null && !Number.isNaN(traded)) market.totalTaken = traded;
   return market;
 }
-export function snapshotMetadata(p: PackedSnapshot): Omit<Snapshot, "countries" | "markets"> {
+export function snapshotMetadata(
+  p: PackedSnapshot,
+): Omit<Snapshot, "countries" | "markets" | "debt"> {
   const {
+    debt: _debt,
     strings: _strings,
     countryValues: _cv,
     countryIds: _ci,
@@ -245,6 +248,7 @@ export function snapshotView(p: PackedSnapshot): Snapshot {
   validatePackedSnapshot(p);
   return {
     ...snapshotMetadata(p),
+    ...(p.debt == null ? {} : { debt: p.debt }),
     countries: Array.from({ length: p.countryIds.length / 3 }, (_, i) => countryAt(p, i)),
     markets: Array.from({ length: p.marketIds.length / 2 }, (_, i) => marketAt(p, i)),
   };

@@ -76,3 +76,11 @@ export type BundleUrls = { game: string; map: string; loc: string };
 export function getBundleUrls(resolved: string): BundleUrls {
   return completeBundles.get(resolved)!;
 }
+
+/** Compiled analysis must not survive a change to the game/localization assets. */
+export function analysisBundleIdentity() {
+  return [...completeBundles]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([version, urls]) => [version, urls.game, urls.loc].join(":"))
+    .join("|");
+}

@@ -40,7 +40,7 @@ beforeEach(() => {
   });
   mocks.queryHistory.mockClear();
   mocks.marketCenters.mockClear();
-  useHistory.setState({ snapshots: [], analysisEnabledCampaigns: [] });
+  useHistory.setState({ snapshots: [], analysisEnabledCampaigns: [], progress: null });
 });
 
 function render(campaignId = "campaign", requested = true) {
@@ -103,3 +103,25 @@ it.each([
     result.cleanup();
   },
 );
+
+it("coalesces import revisions and cancels superseded queries before touching the worker", () => {
+  vi.useFakeTimers();
+  try {
+    mocks.developer = true;
+    useHistory.getState().enableAnalysis("campaign");
+    useHistory.setState({ progress: { completed: 1, total: 100, startedAt: 0 } });
+    const first = render();
+    expect(mocks.queryHistory).not.toHaveBeenCalled();
+    first.cleanup();
+    vi.advanceTimersByTime(250);
+    expect(mocks.queryHistory).not.toHaveBeenCalled();
+    mocks.effects = [];
+    const latest = render();
+    vi.advanceTimersByTime(200);
+    expect(mocks.queryHistory).toHaveBeenCalledOnce();
+    expect(mocks.marketCenters).toHaveBeenCalledOnce();
+    latest.cleanup();
+  } finally {
+    vi.useRealTimers();
+  }
+});

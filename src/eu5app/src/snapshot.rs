@@ -49,6 +49,8 @@ pub struct CountryObservation {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "tsify", derive(tsify::Tsify))]
 pub struct SaveSnapshot {
+    #[cfg_attr(feature = "tsify", tsify(optional))]
+    pub debt: Option<Vec<crate::debt::CountryDebt>>,
     pub date: String,
     pub date_sort: i32,
     pub campaign_id: String,
@@ -205,6 +207,7 @@ pub fn extract(game: &Gamestate<'_>) -> SaveSnapshot {
     let population = totals.values().map(|x| x.population).sum();
     let development = totals.values().map(|x| x.development).sum();
     SaveSnapshot {
+        debt: Some(crate::debt::extract(game)),
         date: format!("{:04}-{:02}-{:02}", date.year, date.month, date.day),
         date_sort: i32::from(date.year) * 10000 + i32::from(date.month) * 100 + i32::from(date.day),
         campaign_id: meta.playthrough_id.to_str().to_owned(),

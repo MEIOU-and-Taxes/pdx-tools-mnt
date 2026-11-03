@@ -6,12 +6,16 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   gameOpen: vi.fn(),
   locOpen: vi.fn(),
+  cacheKey: vi.fn(),
+  cacheRead: vi.fn(),
+  cacheWrite: vi.fn(),
 }));
 vi.mock("comlink", () => ({ expose: vi.fn(), transfer: (value: unknown) => value }));
 vi.mock("@sentry/react-router", () => ({ registerWebWorker: vi.fn() }));
 vi.mock("../bundleUrls", () => ({
   getBundleUrls: () => ({ game: "/game.zip", loc: "/loc.zip" }),
   resolveBundleVersion: (v: string) => v,
+  analysisBundleIdentity: () => "test-assets-v1",
 }));
 vi.mock("@/wasm/wasm_eu5", () => ({
   default: vi.fn(),
@@ -19,6 +23,11 @@ vi.mock("@/wasm/wasm_eu5", () => ({
   ImportLoader: { open: mocks.open },
   Eu5WasmGameBundle: { open: mocks.gameOpen },
   Eu5WasmLocalizationBundle: { open: mocks.locOpen },
+}));
+vi.mock("./analysisCache", () => ({
+  compiledCacheKey: mocks.cacheKey,
+  readCompiledAnalysis: mocks.cacheRead,
+  writeCompiledAnalysis: mocks.cacheWrite,
 }));
 import { parseImport } from "./snapshot-worker";
 import { snapshotView } from "./packedSnapshot";
@@ -28,6 +37,9 @@ beforeEach(() => {
     "fetch",
     vi.fn().mockImplementation(async () => new Response(new Uint8Array([1]))),
   );
+  mocks.cacheKey.mockResolvedValue("test-cache-key");
+  mocks.cacheRead.mockResolvedValue(undefined);
+  mocks.cacheWrite.mockResolvedValue(true);
   const parser = { meta: mocks.meta, parse_import: mocks.parse, free: mocks.free };
   mocks.open.mockResolvedValue(parser);
   mocks.meta.mockReturnValue({ playthroughId: "campaign", version: { major: 1, minor: 4 } });
@@ -50,20 +62,9 @@ beforeEach(() => {
     countryIds: [7],
     countryNames: new Map([[7, "England"]]),
   });
-  vi.stubGlobal(
-    "indexedDB",
-    new Proxy(
-      {},
-      {
-        get: () => {
-          throw Error("Disk caching is forbidden");
-        },
-      },
-    ),
-  );
 });
 afterEach(() => vi.unstubAllGlobals());
-it("uses one full parser and returns transferable analytical columns without disk writes", async () => {
+it("parses once and writes compiled transferable data on a cold cache", async () => {
   const result = await parseImport(new File(["save"], "test.eu5"));
   expect(mocks.parse).toHaveBeenCalledOnce();
   expect(mocks.open).toHaveBeenCalledOnce();
@@ -72,6 +73,7 @@ it("uses one full parser and returns transferable analytical columns without dis
   expect(result.countryIds).toEqual(new Uint32Array([7]));
   expect(result.countryNames).toEqual({ 7: "England" });
   expect(result).not.toHaveProperty("recording");
+  expect(mocks.cacheWrite).toHaveBeenCalledWith("test-cache-key", result);
 });
 it("keeps unnamed market centers selectable with an ID-based label", async () => {
   mocks.parse.mockReturnValue({
@@ -149,4 +151,36 @@ it("reuses loaded bundles across saves in a worker batch", async () => {
   await parseImport(new File(["b"], "b.eu5"));
   expect(mocks.parse).toHaveBeenCalledTimes(2);
   expect(mocks.gameOpen.mock.calls.length).toBeLessThanOrEqual(1);
+});
+
+it("loads a warm disk entry without opening the parser or loading analysis assets", async () => {
+  const compiled = await parseImport(new File(["save"], "original.eu5"));
+  mocks.cacheRead.mockResolvedValue(structuredClone(compiled));
+  mocks.open.mockClear();
+  mocks.parse.mockClear();
+  mocks.gameOpen.mockClear();
+  mocks.locOpen.mockClear();
+  mocks.cacheWrite.mockClear();
+  const report = vi.fn();
+  const result = await parseImport(new File(["save"], "renamed.eu5"), report);
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.parse).not.toHaveBeenCalled();
+  expect(mocks.gameOpen).not.toHaveBeenCalled();
+  expect(mocks.cacheWrite).not.toHaveBeenCalled();
+  expect(result.observation.fileName).toBe("renamed.eu5");
+  expect(result.snapshot.fileName).toBe("renamed.eu5");
+  expect(report).toHaveBeenCalledWith(expect.objectContaining({ cache: "hit" }));
+});
+it("continues to parse when disk caching is unavailable", async () => {
+  mocks.cacheKey.mockRejectedValue(Error("Cache unavailable"));
+  const result = await parseImport(new File(["save"], "test.eu5"));
+  expect(mocks.parse).toHaveBeenCalledOnce();
+  expect(result.snapshot.hash).toBe("eu5:checksum");
+});
+
+it("supports uncached rebuilds without deleting or reading compiled disk entries", async () => {
+  await parseImport(new File(["save"], "test.eu5"), undefined, false);
+  expect(mocks.parse).toHaveBeenCalledOnce();
+  expect(mocks.cacheRead).not.toHaveBeenCalled();
+  expect(mocks.cacheWrite).not.toHaveBeenCalled();
 });

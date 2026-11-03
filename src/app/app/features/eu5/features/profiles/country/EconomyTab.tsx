@@ -1,3 +1,4 @@
+import { DebtCountryDetails } from "../../../history/DebtCountryDetails";
 import { AnimatedValue } from "../../../components/AnimatedValue";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
@@ -41,13 +42,16 @@ function monthOffsetToDate(baseYear: number, baseMonth: number, offset: number):
 export function CountryOverviewTabContent({
   data,
   locations,
+  countryName,
 }: {
   data: CountryOverviewSection;
+  countryName?: string;
   locations: LocationRow[];
 }) {
   const { ranks } = data;
   return (
     <div className="flex flex-col gap-4">
+      {data.debt && <DebtCountryDetails country={data.debt} name={countryName} />}
       <StatRail title="Overview">
         <StatRail.Section label="Economy" />
         <StatRail.Row

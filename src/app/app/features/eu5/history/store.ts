@@ -10,6 +10,8 @@ type HistoryState = {
   setViewedProfiles: (profiles: ActiveProfileIdentity[]) => void;
   remapRevision: number;
   remapViewedProfiles: (profiles: ActiveProfileIdentity[]) => void;
+  section: "map" | "debt";
+  showSection: (section: "map" | "debt") => void;
   panelOpen: boolean;
   showPanel: (open: boolean) => void;
   playbackSpeed: number;
@@ -18,6 +20,10 @@ type HistoryState = {
   sources: Record<string, SourceObservation>;
   analyzingEntryIds: readonly string[];
   analysisEnabledCampaigns: readonly string[];
+  analysisWorkers: number;
+  analysisUseCache: boolean;
+  setAnalysisUseCache: (useCache: boolean) => void;
+  setAnalysisWorkers: (workers: number) => void;
   enableAnalysis: (campaignId: string) => void;
   analysisPaused: boolean;
   analysisPausedCampaigns: string[];
@@ -44,6 +50,8 @@ export const useHistory = create<HistoryState>()((set) => ({
   remapRevision: 0,
   remapViewedProfiles: (viewedProfiles) =>
     set((state) => ({ viewedProfiles, remapRevision: state.remapRevision + 1 })),
+  section: "map",
+  showSection: (section) => set({ section, panelOpen: true }),
   panelOpen: false,
   showPanel: (panelOpen) => set({ panelOpen }),
   playbackSpeed: 1,
@@ -52,6 +60,10 @@ export const useHistory = create<HistoryState>()((set) => ({
   sources: {},
   analyzingEntryIds: [],
   analysisEnabledCampaigns: [],
+  analysisWorkers: 0,
+  analysisUseCache: true,
+  setAnalysisUseCache: (analysisUseCache) => set({ analysisUseCache }),
+  setAnalysisWorkers: (analysisWorkers) => set({ analysisWorkers }),
   enableAnalysis: (campaignId) =>
     set((state) => ({
       analysisEnabledCampaigns: [...new Set([...state.analysisEnabledCampaigns, campaignId])],

@@ -129,7 +129,7 @@ export function TimelineBar() {
           <GameButton
             variant="ghost"
             onClick={() => {
-              useHistory.getState().showPanel(true);
+              useHistory.getState().showSection("map");
               setPanelOpen(true);
             }}
           >

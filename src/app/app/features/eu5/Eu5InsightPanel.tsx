@@ -49,6 +49,7 @@ export function Eu5InsightPanel({ open, onClose }: Eu5InsightPanelProps) {
   const projection = useMapHistory();
   const preview = projection?.preview;
   const featureEnabled = useIsCampaignAnalysisEnabled();
+  const historySection = useHistory((s) => s.section);
   const historyOpen = useHistory((state) => featureEnabled && state.panelOpen);
   const setHistoryOpen = useHistory((state) => state.showPanel);
   const currentMapMode = useEu5MapMode();
@@ -79,7 +80,7 @@ export function Eu5InsightPanel({ open, onClose }: Eu5InsightPanelProps) {
           <div className="min-w-0 flex-1">
             {historyOpen ? (
               <span className="truncate font-game-ui text-sm font-semibold text-game-ink-300">
-                Campaign history
+                {historySection === "debt" ? "Debt & Interest" : "Campaign history"}
               </span>
             ) : preview ? (
               <span className="font-game-ui text-sm font-semibold text-game-ink-300">
@@ -107,7 +108,10 @@ export function Eu5InsightPanel({ open, onClose }: Eu5InsightPanelProps) {
                   </GameButton>
                   <GameButton
                     variant={historyOpen ? "default" : "ghost"}
-                    onClick={() => setHistoryOpen(true)}
+                    onClick={() => {
+                      useHistory.getState().showSection("map");
+                      setHistoryOpen(true);
+                    }}
                   >
                     Over time
                   </GameButton>

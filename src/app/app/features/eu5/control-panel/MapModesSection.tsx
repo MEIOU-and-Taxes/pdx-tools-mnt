@@ -1,3 +1,4 @@
+import { useHistory } from "../history/store";
 import { useId } from "react";
 import { SidebarNav } from "../components/SidebarNav";
 import { useEu5Engine, useEu5MapMode, useEu5Timelapse, useEu5TimelineLive } from "../store";
@@ -78,7 +79,10 @@ function ModeRow({ mode, live, locked }: { mode: ModeConfig; live: boolean; lock
       active={isActive}
       disabled={locked}
       aria-describedby={note !== null ? noteId : undefined}
-      onClick={() => engine.trigger.selectMapMode(mode.value as MapMode)}
+      onClick={() => {
+        useHistory.setState({ section: "map" });
+        engine.trigger.selectMapMode(mode.value as MapMode);
+      }}
     >
       {mode.label}
       {note !== null && (
