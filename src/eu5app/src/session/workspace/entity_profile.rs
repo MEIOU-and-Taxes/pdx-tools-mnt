@@ -599,6 +599,9 @@ impl<'bump> Eu5Workspace<'bump> {
         };
 
         Some(CountryOverviewSection {
+            debt: crate::debt::extract(&self.gamestate)
+                .into_iter()
+                .find(|d| d.country_id == self.gamestate.countries.index(country_idx).id().value()),
             net_gold,
             manpower,
             stability,

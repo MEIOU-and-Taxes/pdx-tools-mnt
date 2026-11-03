@@ -1,4 +1,5 @@
 mod color;
+pub mod debt;
 pub mod entity_profile;
 pub mod game_data;
 pub mod gradient;

@@ -117,3 +117,22 @@ describe("packed historical observations", () => {
     expect(second).toEqual(snapshot());
   });
 });
+
+it("round-trips the optional debt ledger while leaving old observations without invented values", () => {
+  const original = snapshot();
+  original.debt = [
+    {
+      countryId: 7,
+      tag: "ENG",
+      flag: "ENG",
+      wealth: 100,
+      debt: 10,
+      ratedPrincipal: 10,
+      interestWeightedPrincipal: 0.5,
+      newLoanRate: undefined,
+      loans: [{ principal: 10, annualRate: 0.05, lenderId: 0, lenderTag: undefined }],
+    },
+  ];
+  expect(snapshotView(structuredClone(packSnapshot(original))).debt).toEqual(original.debt);
+  expect(snapshotView(packSnapshot(snapshot())).debt).toBeUndefined();
+});

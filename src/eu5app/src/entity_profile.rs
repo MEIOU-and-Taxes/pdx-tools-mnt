@@ -155,6 +155,9 @@ pub struct HeadlineStats {
 #[cfg_attr(feature = "tsify", derive(tsify::Tsify))]
 #[serde(rename_all = "camelCase")]
 pub struct CountryOverviewSection {
+    #[serde(default)]
+    #[cfg_attr(feature = "tsify", tsify(optional))]
+    pub debt: Option<crate::debt::CountryDebt>,
     /// Gold on hand, plus loan principal lent to other countries, minus
     /// outstanding loan principal. Negative when a country is leveraged beyond
     /// its treasury and receivables, so a loan-funded war chest does not read

@@ -211,3 +211,30 @@ it("never merges historical series when a different country reuses the old tag",
       .every((row) => !row.countries.length),
   ).toBe(true);
 });
+
+it("keeps debt in resident history and exports without copying loan ledgers into lightweight descriptors", async () => {
+  const store = new CampaignAnalysisStore();
+  const source = save();
+  source.snapshot.debt = [
+    {
+      countryId: 7,
+      tag: "ENG",
+      flag: "ENG",
+      wealth: 100,
+      debt: 20,
+      ratedPrincipal: 20,
+      interestWeightedPrincipal: 1,
+      newLoanRate: undefined,
+      loans: [{ principal: 20, annualRate: 0.05, lenderId: 0, lenderTag: undefined }],
+    },
+  ];
+  const descriptor = store.append(source);
+  expect(descriptor).not.toHaveProperty("debt");
+  const dates = store.queryHistory({ campaignId: "campaign", country: "world" });
+  expect(dates[0].debt).toEqual(source.snapshot.debt);
+  const exported = JSON.parse(await store.exportObservations("campaign").text());
+  expect(exported.snapshots[0].debt[0].loans[0]).toMatchObject({ principal: 20, annualRate: 0.05 });
+  const older = save("old", 13610101);
+  store.append(older);
+  expect(store.queryHistory({ campaignId: "campaign" })[1].debt).toBeUndefined();
+});
