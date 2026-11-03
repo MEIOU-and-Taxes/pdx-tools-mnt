@@ -5,6 +5,8 @@ import type { SnapshotMetadata } from "./types";
 import type { ImportPhaseState } from "./importTiming";
 import type { parseImport } from "./snapshot-worker";
 export type ImportOptions = {
+  /** Reject duplicate or out-of-scope observations before publishing them. */
+  acceptObservation?: (observation: import("./analysisTypes").MapObservation) => boolean;
   signal: AbortSignal;
   concurrency?: number;
   onSnapshots: (
@@ -95,6 +97,8 @@ export async function importTimeline(files: File[], options: ImportOptions) {
                 taskSignal.throwIfAborted();
                 signal.throwIfAborted();
                 // Waiting for append bounds unwritten analytical output to the active parser count.
+                if (options.acceptObservation && !options.acceptObservation(result.observation))
+                  return;
                 const descriptor = await appendAnalysis(result);
                 // Once append succeeds the observation is committed, even if cancellation
                 // arrived while the worker was accepting it. Publish that committed result.

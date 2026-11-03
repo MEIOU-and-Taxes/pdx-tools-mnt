@@ -42,6 +42,7 @@ export function CountryProfile({ countryIdx }: { countryIdx: number }) {
         >
           <CountryOverviewTabContent
             data={profile.overview}
+            countryName={profile.header.name}
             locations={profile.locations.locations}
           />
         </GameTabs.Content>

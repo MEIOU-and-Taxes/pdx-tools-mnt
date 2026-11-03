@@ -1,10 +1,11 @@
+import { SidebarNav } from "../components/SidebarNav";
 import { useMapHistory } from "../history/context";
 import { useRef, useState } from "react";
 import PlusIcon from "@heroicons/react/16/solid/PlusIcon";
 import { useIsCampaignAnalysisEnabled } from "../history/useIsCampaignAnalysisEnabled";
 import { GameButton } from "@/components/game/Button";
 import { holdsRef, localSaveRegistry, registerLocalSaves } from "@/features/campaign/localSaves";
-import { useEu5Input, useEu5PlaythroughId } from "../store";
+import { useEu5Input, useEu5PlaythroughId, useSetEu5InsightPanelOpen } from "../store";
 import { isAnalysisPaused, useHistory } from "../history/store";
 import { ImportProgress } from "../history/ImportProgress";
 import { analyzeCampaign } from "../history/analyzeCampaign";
@@ -24,6 +25,7 @@ export const Eu5ControlPanel = () => {
         <CampaignSection className="border-b border-game-line" />
         <AddCampaignSaves />
         <MapModesSection />
+        <FinancialAnalysisNav />
         <div className="flex-1 overflow-hidden" />
         <RenderBar />
         <ShareRow unavailable={!!preview} />
@@ -141,5 +143,28 @@ function AddCampaignSaves() {
         </details>
       )}
     </div>
+  );
+}
+
+function FinancialAnalysisNav() {
+  const enabled = useIsCampaignAnalysisEnabled();
+  const section = useHistory((s) => s.section);
+  const open = useHistory((s) => s.panelOpen);
+  const setPanelOpen = useSetEu5InsightPanelOpen();
+  if (!enabled) return null;
+  return (
+    <SidebarNav aria-label="Financial analysis" className="border-b border-game-line">
+      <SidebarNav.Section label="Analysis">
+        <SidebarNav.Item
+          active={open && section === "debt"}
+          onClick={() => {
+            useHistory.getState().showSection("debt");
+            setPanelOpen(true);
+          }}
+        >
+          Debt &amp; Interest
+        </SidebarNav.Item>
+      </SidebarNav.Section>
+    </SidebarNav>
   );
 }

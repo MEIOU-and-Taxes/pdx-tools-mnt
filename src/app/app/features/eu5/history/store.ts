@@ -10,6 +10,8 @@ type HistoryState = {
   setViewedProfiles: (profiles: ActiveProfileIdentity[]) => void;
   remapRevision: number;
   remapViewedProfiles: (profiles: ActiveProfileIdentity[]) => void;
+  section: "map" | "debt";
+  showSection: (section: "map" | "debt") => void;
   panelOpen: boolean;
   showPanel: (open: boolean) => void;
   playbackSpeed: number;
@@ -44,6 +46,8 @@ export const useHistory = create<HistoryState>()((set) => ({
   remapRevision: 0,
   remapViewedProfiles: (viewedProfiles) =>
     set((state) => ({ viewedProfiles, remapRevision: state.remapRevision + 1 })),
+  section: "map",
+  showSection: (section) => set({ section, panelOpen: true }),
   panelOpen: false,
   showPanel: (panelOpen) => set({ panelOpen }),
   playbackSpeed: 1,

@@ -7,6 +7,7 @@ import * as echarts from "echarts/core";
 import {
   PieChart,
   BarChart,
+  BoxplotChart,
   LineChart,
   ScatterChart,
   TreemapChart,
@@ -31,6 +32,7 @@ import type { ComposeOption } from "echarts/core";
 import type {
   PieSeriesOption,
   BarSeriesOption,
+  BoxplotSeriesOption,
   LineSeriesOption,
   ScatterSeriesOption,
   TreemapSeriesOption,
@@ -53,6 +55,7 @@ import type {
 echarts.use([
   PieChart,
   BarChart,
+  BoxplotChart,
   LineChart,
   ScatterChart,
   TreemapChart,
@@ -75,6 +78,7 @@ echarts.use([
 // Compose option type from only the charts and components we use
 export type EChartsOption = ComposeOption<
   | PieSeriesOption
+  | BoxplotSeriesOption
   | BarSeriesOption
   | LineSeriesOption
   | ScatterSeriesOption

@@ -1,6 +1,8 @@
+import { useHistory } from "./store";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type * as Zustand from "zustand";
+import type * as HistoryStore from "./store";
 import { beforeEach, expect, it, vi } from "vitest";
 import { Eu5UIEngine } from "../ui-engine";
 import type { GameInstance, PaletteGradients, TimelineData } from "../game-adapter";
@@ -26,6 +28,17 @@ vi.mock("zustand", async (original) => ({
     return select(store.getState());
   },
 }));
+vi.mock("./store", async (original) => {
+  const actual = await original<typeof HistoryStore>();
+  return {
+    ...actual,
+    useHistory: Object.assign(
+      (select: (state: ReturnType<typeof actual.useHistory.getState>) => unknown) =>
+        select(actual.useHistory.getState()),
+      actual.useHistory,
+    ),
+  };
+});
 vi.mock("@/features/account", () => ({ useIsDeveloper: () => feature.enabled }));
 vi.mock("@/features/campaign/CampaignProvider", () => ({ useCampaign: () => null }));
 vi.mock("./CampaignAnalysis", () => ({ CampaignAnalysis: () => null }));
@@ -103,6 +116,7 @@ function render(store: Eu5Store, children: React.ReactNode = <Preview />) {
 beforeEach(() => {
   subscriptions.splice(0);
   feature.enabled = false;
+  useHistory.setState({ section: "map", panelOpen: false, analysisEnabledCampaigns: [] });
 });
 
 it("keeps history subscriptions stable for hover and camera updates with analysis disabled", () => {
@@ -182,4 +196,17 @@ it("keeps analytical snapshot queries stable for unrelated viewer updates", () =
     appState: { ...before.appState, hoverDisplayData: { kind: "clear" }, cursorHint: "move" },
   };
   for (const select of subscriptions) expect(select(after)).toBe(select(before));
+});
+
+it("switches political playback to saved observations only while financial analysis is open", () => {
+  feature.enabled = true;
+  const store = historyStore();
+  store.setState({ playthroughId: "campaign" as State["playthroughId"] });
+  useHistory.setState({ analysisEnabledCampaigns: ["campaign"], section: "debt", panelOpen: true });
+  function Controls() {
+    return <span>{useMapHistory()?.controller ? "saved dates" : "ownership history"}</span>;
+  }
+  expect(render(store, <Controls />)).toBe("<span>saved dates</span>");
+  useHistory.setState({ section: "map" });
+  expect(render(store, <Controls />)).toBe("<span>ownership history</span>");
 });
