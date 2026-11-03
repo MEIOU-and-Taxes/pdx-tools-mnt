@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { CountryDebt } from "./debtStats";
 import {
   annualPercent,
   bandFor,
@@ -9,7 +10,6 @@ import {
   debtBands,
   histogram,
   borrowersInBand,
-  type CountryDebt,
 } from "./debtStats";
 function country(
   id: number,
