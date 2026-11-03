@@ -43,6 +43,8 @@ export async function importComparison(files: File[], currentCampaign: string) {
   try {
     const result = await importTimeline(candidates, {
       signal: controller.signal,
+      concurrency: useHistory.getState().analysisWorkers || undefined,
+      useCompiledCache: useHistory.getState().analysisUseCache,
       acceptObservation: (observation) => {
         if (observation.campaignId === currentCampaign || seen.has(observation.hash)) {
           skipped++;

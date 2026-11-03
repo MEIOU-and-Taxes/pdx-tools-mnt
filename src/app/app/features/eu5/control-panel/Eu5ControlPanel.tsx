@@ -1,6 +1,7 @@
+import { compiledCacheStatus, clearCompiledCache } from "../history/analysisCache";
 import { SidebarNav } from "../components/SidebarNav";
 import { useMapHistory } from "../history/context";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PlusIcon from "@heroicons/react/16/solid/PlusIcon";
 import { useIsCampaignAnalysisEnabled } from "../history/useIsCampaignAnalysisEnabled";
 import { GameButton } from "@/components/game/Button";
@@ -24,6 +25,7 @@ export const Eu5ControlPanel = () => {
         <PanelHeader />
         <CampaignSection className="border-b border-game-line" />
         <AddCampaignSaves />
+        <CompiledCacheControls />
         <MapModesSection />
         <FinancialAnalysisNav />
         <div className="flex-1 overflow-hidden" />
@@ -40,6 +42,8 @@ function AddCampaignSaves() {
   const input = useRef<HTMLInputElement>(null);
   const folder = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const workers = useHistory((s) => s.analysisWorkers);
+  const useCache = useHistory((s) => s.analysisUseCache);
   const playthroughId = useEu5PlaythroughId();
   const currentInput = useEu5Input();
   const localSaves = localSaveRegistry.useEntries();
@@ -104,6 +108,36 @@ function AddCampaignSaves() {
         {...{ webkitdirectory: "" }}
         onChange={onChange}
       />
+      {featureEnabled && (
+        <label className="mt-2 flex items-center justify-between gap-2 text-[10px] text-game-ink-500">
+          Analysis workers
+          <select
+            aria-label="Analysis workers"
+            value={workers}
+            disabled={!!progress}
+            className="rounded-control border border-game-line bg-game-panel px-1 py-0.5 text-game-ink-300"
+            onChange={(e) => useHistory.getState().setAnalysisWorkers(Number(e.target.value))}
+          >
+            {[0, 1, 2, 4, 6, 8].map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? "Auto (CPU / memory)" : `${n} workers`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {featureEnabled && (
+        <label className="mt-2 flex items-center gap-2 text-[10px] text-game-ink-500">
+          <input
+            type="checkbox"
+            aria-label="Use compiled disk cache"
+            checked={useCache}
+            disabled={!!progress}
+            onChange={(e) => useHistory.getState().setAnalysisUseCache(e.target.checked)}
+          />
+          Use compiled disk cache
+        </label>
+      )}
       {featureEnabled && (!enabled || paused || issues.length > 0) && (
         <GameButton
           className="mt-2 w-full"
@@ -166,5 +200,50 @@ function FinancialAnalysisNav() {
         </SidebarNav.Item>
       </SidebarNav.Section>
     </SidebarNav>
+  );
+}
+
+function CompiledCacheControls() {
+  const enabled = useIsCampaignAnalysisEnabled();
+  const progress = useHistory((s) => s.progress);
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof compiledCacheStatus>> | null>(
+    null,
+  );
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!enabled || progress) return;
+    let cancelled = false;
+    void compiledCacheStatus().then((s) => {
+      if (!cancelled) setStatus(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, progress]);
+  if (!enabled || !status) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-1 border-b border-game-line px-3.5 py-2 text-[10px] text-game-ink-500">
+      <span>
+        {status.available
+          ? `Disk cache · ${status.count} saves · ${(status.bytes / 1024 ** 2).toFixed(0)} MB`
+          : "Disk cache unavailable"}
+      </span>
+      {status.available && (
+        <button
+          type="button"
+          disabled={!!progress || status.count === 0}
+          onClick={() => {
+            void clearCompiledCache()
+              .then(() => compiledCacheStatus())
+              .then(setStatus)
+              .catch((e) => setError(String(e)));
+          }}
+          className="underline disabled:opacity-40"
+        >
+          Clear cache
+        </button>
+      )}
+      {error && <span role="status">{error}</span>}
+    </div>
   );
 }

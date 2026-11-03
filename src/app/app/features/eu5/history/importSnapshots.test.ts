@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   memory: vi.fn(),
   workers: [] as { terminate: ReturnType<typeof vi.fn> }[],
 }));
-vi.mock("comlink", () => ({ wrap: () => mocks }));
+vi.mock("comlink", () => ({ wrap: () => mocks, proxy: (fn: unknown) => fn }));
 vi.mock("@/lib/sentryWorker", () => ({ trackWorker: vi.fn(() => vi.fn()) }));
 vi.mock("./analysisClient", () => ({
   appendAnalysis: mocks.append,
@@ -57,7 +57,7 @@ it("publishes only accepted analysis and performs no cache-finishing phase", asy
   const opts = options();
   const result = await importTimeline([new File(["SAV01000text"], "save-0.eu5")], opts);
   expect(result.errors).toEqual([]);
-  expect(mocks.parseImport).toHaveBeenCalledWith(expect.any(File));
+  expect(mocks.parseImport).toHaveBeenCalledWith(expect.any(File), expect.any(Function), true);
   expect(opts.onSnapshots).toHaveBeenCalledWith(
     [descriptor(0)],
     [{ snapshot: descriptor(0), file: expect.any(File) }],

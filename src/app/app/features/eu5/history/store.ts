@@ -20,6 +20,10 @@ type HistoryState = {
   sources: Record<string, SourceObservation>;
   analyzingEntryIds: readonly string[];
   analysisEnabledCampaigns: readonly string[];
+  analysisWorkers: number;
+  analysisUseCache: boolean;
+  setAnalysisUseCache: (useCache: boolean) => void;
+  setAnalysisWorkers: (workers: number) => void;
   enableAnalysis: (campaignId: string) => void;
   analysisPaused: boolean;
   analysisPausedCampaigns: string[];
@@ -56,6 +60,10 @@ export const useHistory = create<HistoryState>()((set) => ({
   sources: {},
   analyzingEntryIds: [],
   analysisEnabledCampaigns: [],
+  analysisWorkers: 0,
+  analysisUseCache: true,
+  setAnalysisUseCache: (analysisUseCache) => set({ analysisUseCache }),
+  setAnalysisWorkers: (analysisWorkers) => set({ analysisWorkers }),
   enableAnalysis: (campaignId) =>
     set((state) => ({
       analysisEnabledCampaigns: [...new Set([...state.analysisEnabledCampaigns, campaignId])],

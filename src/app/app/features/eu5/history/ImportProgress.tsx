@@ -35,6 +35,7 @@ export function ImportProgress({
       <div role="status" className="mb-2 flex flex-wrap justify-between gap-2">
         <span>
           {progress.phase ? "Analyzing saves" : "Importing campaign"} · {percent}%
+          {progress.phase?.concurrency ? ` · ${progress.phase.concurrency} workers` : ""}
         </span>
         <span>
           {etaSeconds == null
@@ -57,6 +58,12 @@ export function ImportProgress({
           style={{ width: `${percent}%` }}
         />
       </div>
+      {progress.phase?.stage && (
+        <p className="mt-2 text-game-ink-500">
+          {progress.phase.stage}
+          {progress.phase.cacheHits ? ` · ${progress.phase.cacheHits} loaded from disk` : ""}
+        </p>
+      )}
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="min-w-0 truncate">{progress.fileName ?? "Preparing import…"}</span>
         <button onClick={onCancel} className="shrink-0 underline">

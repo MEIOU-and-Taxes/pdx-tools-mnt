@@ -1,5 +1,7 @@
 export type ImportPhaseState = {
   phase: "import";
+  stage?: string;
+  cacheHits?: number;
   completed: number;
   total: number;
   startedAt: number;
