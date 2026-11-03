@@ -1,3 +1,4 @@
+import { AnimatedValue } from "../components/AnimatedValue";
 import { memo, useMemo, useRef, useState } from "react";
 import { EChart } from "@/components/viz";
 import type { EChartsOption } from "@/components/viz";
@@ -203,7 +204,7 @@ export function DebtPanels({
         {comparison.loading && <p role="status">Loading comparison…</p>}
         {comparison.error && <p role="alert">{comparison.error}</p>}
       </div>
-      <DebtObservation dates={scoped} selected={selected} names={names} title="Current campaign" />
+      <DebtObservation selected={selected} names={names} title="Current campaign" />
       {traces.map((m) => (
         <div key={m.label} className={styles.chart}>
           <h2>{m.label}</h2>
@@ -260,12 +261,7 @@ function ComparisonObservation({
           </GameSelect.Content>
         </GameSelect>
       </label>
-      <DebtObservation
-        dates={dates}
-        selected={selected}
-        names={names}
-        title="Comparison campaign"
-      />
+      <DebtObservation selected={selected} names={names} title="Comparison campaign" />
     </>
   );
 }
@@ -364,7 +360,17 @@ const BoxHistory = memo(function BoxHistory({
 }) {
   const option: EChartsOption = {
     ...chartBase(),
-    tooltip: { ...chartTooltip, appendTo: "body", trigger: "item", confine: true },
+    tooltip: {
+      ...chartTooltip,
+      appendTo: "body",
+      trigger: "item",
+      confine: true,
+      formatter: (params) => {
+        const point = Array.isArray(params) ? params[0] : params;
+        const values = point.value as number[];
+        return `${point.name}<br/>25th percentile: ${debtNumber(values[1], "%")}<br/>Median: ${debtNumber(values[2], "%")}<br/>75th percentile: ${debtNumber(values[3], "%")}`;
+      },
+    },
     xAxis: {
       type: "category",
       data: dates.map((s) => s.date),
@@ -382,7 +388,8 @@ const BoxHistory = memo(function BoxHistory({
         itemStyle: { color: seriesFill(0, 0.22), borderColor: seriesColors[0] },
         data: dates.map((s) => {
           const summary = debtSummary(s.debt);
-          return (summary ? weightedBox(summary.loans) : null) ?? [NaN, NaN, NaN, NaN, NaN];
+          const box = summary ? weightedBox(summary.loans) : null;
+          return box ? [box[1], box[1], box[2], box[3], box[3]] : [NaN, NaN, NaN, NaN, NaN];
         }),
       },
     ],
@@ -391,20 +398,18 @@ const BoxHistory = memo(function BoxHistory({
     <div className={styles.chart}>
       <h2>{title}</h2>
       <p className={styles.help}>
-        Principal-weighted quartiles and median. Whiskers show the minimum and maximum saved loan
-        rates. Empty dates have no box.
+        Principal-weighted middle 50% of loan rates (interquartile range), with the median inside
+        each box. Empty dates have no box.
       </p>
       <EChart option={option} style={{ height: 300 }} mergeUpdates />
     </div>
   );
 });
 function DebtObservation({
-  dates,
   selected,
   names,
   title,
 }: {
-  dates: Snapshot[];
   selected?: Snapshot;
   names: Record<string, string>;
   title: string;
@@ -413,8 +418,8 @@ function DebtObservation({
   const [sort, setSort] = useState<"debt" | "rate" | "ratio">("debt");
   const [descending, setDescending] = useState(true);
   const [countryId, setCountryId] = useState<number | null>(null);
-  const bands = useMemo(() => debtBands(dates.map((s) => s.debt)), [dates]);
   const countries = selected?.debt;
+  const bands = useMemo(() => debtBands([countries]), [countries]);
   const summary = useMemo(() => debtSummary(countries), [countries]);
   const countrySummaries = useMemo(
     () => new Map((countries ?? []).map((c) => [c.countryId, debtSummary([c])!])),
@@ -509,29 +514,36 @@ function DebtObservation({
           <dl className={styles.debtStats}>
             <div>
               <dt>Total debt</dt>
-              <dd>{debtNumber(summary.debt)} gold</dd>
+              <dd>
+                <AnimatedValue value={debtNumber(summary.debt)} /> gold
+              </dd>
             </div>
             <div>
               <dt>Weighted interest</dt>
-              <dd>{debtNumber(summary.rate, "%")}</dd>
+              <dd>
+                <AnimatedValue value={debtNumber(summary.rate, "%")} />
+              </dd>
             </div>
             <div>
               <dt>Debt / Wealth</dt>
-              <dd>{debtNumber(summary.ratio, "%")}</dd>
+              <dd>
+                <AnimatedValue value={debtNumber(summary.ratio, "%")} />
+              </dd>
             </div>
             <div>
               <dt>Wealth</dt>
-              <dd>{debtNumber(summary.wealth)}</dd>
+              <dd>
+                <AnimatedValue value={debtNumber(summary.wealth)} />
+              </dd>
             </div>
           </dl>
           <h3>Debt by interest-rate band</h3>
           <p className={styles.help}>
             The vertical line marks the debt-weighted mean. Click a bar to filter borrowers. Bands
-            include their lower bound and exclude their upper bound, and stay fixed across saved
-            dates.
+            include their lower bound and exclude their upper bound. The X-axis fits the current
+            saved observation.
           </p>
           <EChart
-            key={`${bands[0]}:${bands.at(-1)}`}
             option={option}
             style={{ height: 300 }}
             gpuBars
@@ -635,10 +647,18 @@ const BorrowerRow = memo(function BorrowerRow({
           {name}
         </button>
       </td>
-      <td>{debtNumber(debt)}</td>
-      <td>{debtNumber(rate, "%")}</td>
-      <td>{debtNumber(ratio, "%")}</td>
-      <td>{debtNumber(newRate, "%")}</td>
+      <td>
+        <AnimatedValue value={debtNumber(debt)} />
+      </td>
+      <td>
+        <AnimatedValue value={debtNumber(rate, "%")} />
+      </td>
+      <td>
+        <AnimatedValue value={debtNumber(ratio, "%")} />
+      </td>
+      <td>
+        <AnimatedValue value={debtNumber(newRate, "%")} />
+      </td>
     </tr>
   );
 });

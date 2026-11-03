@@ -1,11 +1,13 @@
-import { memo, useLayoutEffect, useRef, useState } from "react";
+import { memo, useState } from "react";
 import type { ReactNode } from "react";
 import { useElementVisible } from "./useElementVisible";
+import { useHistory } from "../history/store";
+import { numberAnimationDuration } from "./numberAnimation";
+import { useRollingDigit } from "./useRollingDigit";
 
 const separators = new Intl.NumberFormat().formatToParts(1234.5);
 const decimal = separators.find((p) => p.type === "decimal")?.value ?? ".";
 const group = separators.find((p) => p.type === "group")?.value ?? ",";
-const timing = { duration: 800, easing: "cubic-bezier(.22,.61,.36,1)" };
 
 /** Retain the original formatting, animating changed digits with compositor transforms. */
 export const AnimatedValue = memo(function AnimatedValue({ value }: { value: ReactNode }) {
@@ -42,6 +44,8 @@ function RollingNumber({
   suffix: string;
   actual: number;
 }) {
+  const speed = useHistory((state) => state.playbackSpeed);
+  const duration = numberAnimationDuration(speed);
   const { ref, visible } = useElementVisible();
   const [previous, setPrevious] = useState({ actual, trend: 0 });
   const trend = actual === previous.actual ? previous.trend : Math.sign(actual - previous.actual);
@@ -63,7 +67,12 @@ function RollingNumber({
         <span aria-hidden="true">
           {prefix}
           {characters.map(({ key, char }) => (
-            <RollingCharacter key={key} char={char} trend={trend} />
+            <RollingCharacter
+              key={key}
+              char={char}
+              trend={actual < 0 ? -trend : trend}
+              duration={duration}
+            />
           ))}
           {suffix}
         </span>
@@ -74,45 +83,16 @@ function RollingNumber({
   );
 }
 
-function RollingCharacter({ char, trend }: { char: string; trend: number }) {
-  const incoming = useRef<HTMLSpanElement>(null);
-  const outgoing = useRef<HTMLSpanElement>(null);
-  const previous = useRef(char);
-  useLayoutEffect(() => {
-    const old = previous.current;
-    previous.current = char;
-    const next = incoming.current;
-    const last = outgoing.current;
-    if (
-      !next ||
-      !last ||
-      old === char ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      return;
-    last.textContent = old;
-    const direction = trend < 0 ? -1 : 1;
-    const digit = /\d/.test(old) && /\d/.test(char);
-    const enter = next.animate(
-      digit
-        ? [{ transform: `translateY(${direction * 100}%)` }, { transform: "translateY(0)" }]
-        : [{ opacity: 0 }, { opacity: 1 }],
-      digit ? timing : { duration: 250, easing: "ease-out" },
-    );
-    const exit = last.animate(
-      digit
-        ? [
-            { transform: "translateY(0)", opacity: 1 },
-            { transform: `translateY(${-direction * 100}%)`, opacity: 1 },
-          ]
-        : [{ opacity: 1 }, { opacity: 0 }],
-      digit ? timing : { duration: 250, easing: "ease-out" },
-    );
-    return () => {
-      enter.cancel();
-      exit.cancel();
-    };
-  }, [char, trend]);
+function RollingCharacter({
+  char,
+  trend,
+  duration,
+}: {
+  char: string;
+  trend: number;
+  duration: number;
+}) {
+  const { incoming, outgoing } = useRollingDigit(char, trend, duration);
   return (
     <span className="relative inline-block overflow-clip align-bottom">
       <span className="invisible select-none">{char}</span>

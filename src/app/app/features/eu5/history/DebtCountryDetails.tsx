@@ -1,3 +1,4 @@
+import { AnimatedValue } from "../components/AnimatedValue";
 import type { CountryDebt } from "./debtStats";
 import { annualPercent, debtSummary } from "./debtStats";
 import { Eu5Flag } from "../components/flags/Eu5Flag";
@@ -25,19 +26,27 @@ export function DebtCountryDetails({
       <dl className={styles.debtStats}>
         <div>
           <dt>Outstanding debt</dt>
-          <dd>{debtNumber(summary.debt)} gold</dd>
+          <dd>
+            <AnimatedValue value={debtNumber(summary.debt)} /> gold
+          </dd>
         </div>
         <div>
           <dt>Existing-loan rate</dt>
-          <dd>{debtNumber(summary.rate, "%")}</dd>
+          <dd>
+            <AnimatedValue value={debtNumber(summary.rate, "%")} />
+          </dd>
         </div>
         <div>
           <dt>New-loan rate</dt>
-          <dd>{debtNumber(annualPercent(country.newLoanRate), "%")}</dd>
+          <dd>
+            <AnimatedValue value={debtNumber(annualPercent(country.newLoanRate), "%")} />
+          </dd>
         </div>
         <div>
           <dt>Debt / Wealth</dt>
-          <dd>{debtNumber(summary.ratio, "%")}</dd>
+          <dd>
+            <AnimatedValue value={debtNumber(summary.ratio, "%")} />
+          </dd>
         </div>
       </dl>
       <p className={styles.help}>
@@ -64,8 +73,12 @@ export function DebtCountryDetails({
                       loan.lenderTag ??
                       `Country ${loan.lenderId}`)}
                 </td>
-                <td>{debtNumber(loan.principal)}</td>
-                <td>{debtNumber(annualPercent(loan.annualRate), "%")}</td>
+                <td>
+                  <AnimatedValue value={debtNumber(loan.principal)} />
+                </td>
+                <td>
+                  <AnimatedValue value={debtNumber(annualPercent(loan.annualRate), "%")} />
+                </td>
               </tr>
             ))}
             {!country.loans.length && (
