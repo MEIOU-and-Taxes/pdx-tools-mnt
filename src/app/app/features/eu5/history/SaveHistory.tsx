@@ -335,7 +335,7 @@ export function SaveHistory({
         </header>
         {error ? (
           <p>{error}</p>
-        ) : loading ? (
+        ) : loading && !dates.length ? (
           <p>Loading campaign charts…</p>
         ) : !dates.length ? (
           <section className={styles.empty}>

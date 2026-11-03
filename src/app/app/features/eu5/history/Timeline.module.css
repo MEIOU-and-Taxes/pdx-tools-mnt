@@ -419,3 +419,21 @@
 .debtPanels > .chart {
   min-width: 0;
 }
+
+/* Keep changing debt values from measuring every country row on each frame. */
+.debtTable .marketTable {
+  table-layout: fixed;
+}
+.debtTable .marketTable th:first-child {
+  width: 35%;
+}
+.debtTable .goodHeading {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.debtTable {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
+}

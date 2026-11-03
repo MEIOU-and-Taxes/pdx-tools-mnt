@@ -92,53 +92,40 @@ export function DebtPanels({
   const summaries = useMemo(() => scoped.map((s) => debtSummary(s.debt)), [scoped]);
   const otherSummaries = useMemo(() => otherDates.map((s) => debtSummary(s.debt)), [otherDates]);
   const selected = selectedHash ? scoped.find((s) => s.hash === selectedHash) : scoped.at(-1);
-  const selector = (
-    value: Scope,
-    update: (scope: Scope) => void,
-    options: Record<string, string>,
-    label: string,
-  ) => (
-    <label className={styles.field}>
-      <span>{label}</span>
-      <GameSelect value={value} onValueChange={(v) => update(v as Scope)}>
-        <GameSelect.Trigger aria-label={label}>
-          <GameSelect.Value className="min-w-0 truncate text-left" />
-        </GameSelect.Trigger>
-        <GameSelect.Content>
-          <GameSelect.Item value="world">World · all countries</GameSelect.Item>
-          {Object.entries(options)
-            .sort((a, b) => a[1].localeCompare(b[1]))
-            .map(([id, name]) => (
-              <GameSelect.Item key={id} value={`id:${id}`}>
-                {name}
-              </GameSelect.Item>
-            ))}
-        </GameSelect.Content>
-      </GameSelect>
-    </label>
+  const metrics = useMemo(
+    () => [
+      {
+        label: "Weighted annual interest",
+        unit: "% · weighted by outstanding principal",
+        get: (s: ReturnType<typeof debtSummary>) => s?.rate ?? null,
+      },
+      {
+        label: "Total outstanding debt",
+        unit: "Gold",
+        get: (s: ReturnType<typeof debtSummary>) => s?.debt ?? null,
+      },
+      {
+        label: "Debt / Wealth",
+        unit: "% · debt divided by potential tax base, not GDP",
+        get: (s: ReturnType<typeof debtSummary>) => s?.ratio ?? null,
+      },
+      {
+        label: "Total Wealth",
+        unit: "Potential tax base",
+        get: (s: ReturnType<typeof debtSummary>) => s?.wealth ?? null,
+      },
+    ],
+    [],
   );
-  const metrics = [
-    {
-      label: "Weighted annual interest",
-      unit: "% · weighted by outstanding principal",
-      get: (s: ReturnType<typeof debtSummary>) => s?.rate ?? null,
-    },
-    {
-      label: "Total outstanding debt",
-      unit: "Gold",
-      get: (s: ReturnType<typeof debtSummary>) => s?.debt ?? null,
-    },
-    {
-      label: "Debt / Wealth",
-      unit: "% · debt divided by potential tax base, not GDP",
-      get: (s: ReturnType<typeof debtSummary>) => s?.ratio ?? null,
-    },
-    {
-      label: "Total Wealth",
-      unit: "Potential tax base",
-      get: (s: ReturnType<typeof debtSummary>) => s?.wealth ?? null,
-    },
-  ];
+  const traces = useMemo(
+    () =>
+      metrics.map((m) => ({
+        ...m,
+        current: summaries.map(m.get),
+        other: otherSummaries.map(m.get),
+      })),
+    [metrics, summaries, otherSummaries],
+  );
   return (
     <section aria-label="Debt & Interest" className={styles.debtPanels}>
       <div className={styles.chart}>
@@ -177,7 +164,7 @@ export function DebtPanels({
           not GDP.
         </p>
         <div className={styles.filterGrid}>
-          {selector(scope, setScope, names, "Country scope")}
+          <DebtScopeSelect value={scope} update={setScope} options={names} label="Country scope" />
           <label className={styles.field}>
             <span>Compare analyzed campaign</span>
             <GameSelect
@@ -200,8 +187,14 @@ export function DebtPanels({
               </GameSelect.Content>
             </GameSelect>
           </label>
-          {compare !== "none" &&
-            selector(otherScope, setOtherScope, otherNames, "Comparison country scope")}
+          {compare !== "none" && (
+            <DebtScopeSelect
+              value={otherScope}
+              update={setOtherScope}
+              options={otherNames}
+              label="Comparison country scope"
+            />
+          )}
         </div>
         <p className={styles.help}>
           Choose Compare to analyze saves from another campaign without changing the open map. Each
@@ -211,15 +204,15 @@ export function DebtPanels({
         {comparison.error && <p role="alert">{comparison.error}</p>}
       </div>
       <DebtObservation dates={scoped} selected={selected} names={names} title="Current campaign" />
-      {metrics.map((m) => (
+      {traces.map((m) => (
         <div key={m.label} className={styles.chart}>
           <h2>{m.label}</h2>
           <p className={styles.help}>{m.unit}</p>
           <DebtHistoryChart
             dates={scoped}
-            values={summaries.map(m.get)}
+            values={m.current}
             otherDates={otherDates}
-            otherValues={otherSummaries.map(m.get)}
+            otherValues={m.other}
             title={m.label}
           />
         </div>
@@ -283,7 +276,7 @@ function chartBase(): EChartsOption {
     useUTC: true,
     color: [...seriesColors],
     textStyle: { color: t.labelColor, fontFamily: t.numFamily },
-    tooltip: { ...chartTooltip, trigger: "axis", confine: true },
+    tooltip: { ...chartTooltip, appendTo: "body", trigger: "axis", confine: true },
     grid: { left: 80, right: 25, top: 40, bottom: 75 },
     xAxis: { type: "time", axisLabel: { color: t.tickColor, formatter: "{yyyy}-{MM}" } },
     yAxis: {
@@ -320,7 +313,7 @@ function exportDebt(
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function DebtHistoryChart({
+const DebtHistoryChart = memo(function DebtHistoryChart({
   dates,
   values,
   otherDates,
@@ -358,10 +351,10 @@ function DebtHistoryChart({
       >
         Export CSV
       </button>
-      <EChart option={option} style={{ height: 280 }} />
+      <EChart option={option} style={{ height: 280 }} mergeUpdates />
     </>
   );
-}
+});
 const BoxHistory = memo(function BoxHistory({
   dates,
   title,
@@ -371,7 +364,7 @@ const BoxHistory = memo(function BoxHistory({
 }) {
   const option: EChartsOption = {
     ...chartBase(),
-    tooltip: { ...chartTooltip, trigger: "item", confine: true },
+    tooltip: { ...chartTooltip, appendTo: "body", trigger: "item", confine: true },
     xAxis: {
       type: "category",
       data: dates.map((s) => s.date),
@@ -401,7 +394,7 @@ const BoxHistory = memo(function BoxHistory({
         Principal-weighted quartiles and median. Whiskers show the minimum and maximum saved loan
         rates. Empty dates have no box.
       </p>
-      <EChart option={option} style={{ height: 300 }} />
+      <EChart option={option} style={{ height: 300 }} mergeUpdates />
     </div>
   );
 });
@@ -422,19 +415,26 @@ function DebtObservation({
   const [countryId, setCountryId] = useState<number | null>(null);
   const bands = useMemo(() => debtBands(dates.map((s) => s.debt)), [dates]);
   const countries = selected?.debt;
-  const summary = debtSummary(countries);
-  const rows = borrowersInBand(countries ?? [], band).toSorted((a, b) => {
-    const va = debtSummary([a]),
-      vb = debtSummary([b]);
-    const av = va?.[sort],
-      bv = vb?.[sort];
-    if (av == null) return bv == null ? a.countryId - b.countryId : 1;
-    if (bv == null) return -1;
-    return (descending ? -1 : 1) * (av - bv) || a.countryId - b.countryId;
-  });
+  const summary = useMemo(() => debtSummary(countries), [countries]);
+  const countrySummaries = useMemo(
+    () => new Map((countries ?? []).map((c) => [c.countryId, debtSummary([c])!])),
+    [countries],
+  );
+  const rows = useMemo(
+    () =>
+      borrowersInBand(countries ?? [], band).toSorted((a, b) => {
+        const av = countrySummaries.get(a.countryId)?.[sort],
+          bv = countrySummaries.get(b.countryId)?.[sort];
+        if (av == null) return bv == null ? a.countryId - b.countryId : 1;
+        if (bv == null) return -1;
+        return (descending ? -1 : 1) * (av - bv) || a.countryId - b.countryId;
+      }),
+    [countries, band, sort, descending, countrySummaries],
+  );
   const bins = histogram(countries ?? [], bands);
   const option: EChartsOption = {
     ...chartBase(),
+    animation: true,
     xAxis: {
       type: "value",
       name: "Annual interest (%)",
@@ -534,6 +534,8 @@ function DebtObservation({
             key={`${bands[0]}:${bands.at(-1)}`}
             option={option}
             style={{ height: 300 }}
+            gpuBars
+            mergeUpdates
             onInit={(chart) =>
               chart.on("click", (event) => {
                 const data = event.data as { band?: number } | undefined;
@@ -565,24 +567,19 @@ function DebtObservation({
               </thead>
               <tbody>
                 {rows.map((c) => {
-                  const s = debtSummary([c])!;
+                  const stats = countrySummaries.get(c.countryId)!;
                   return (
-                    <tr key={c.countryId}>
-                      <td>
-                        <button
-                          type="button"
-                          className={styles.goodHeading}
-                          onClick={() => setCountryId(c.countryId)}
-                        >
-                          <Eu5Flag flag={c.flag} size="sm" />
-                          {names[String(c.countryId)] ?? c.tag}
-                        </button>
-                      </td>
-                      <td>{debtNumber(c.debt)}</td>
-                      <td>{debtNumber(s.rate, "%")}</td>
-                      <td>{debtNumber(s.ratio, "%")}</td>
-                      <td>{debtNumber(annualPercent(c.newLoanRate), "%")}</td>
-                    </tr>
+                    <BorrowerRow
+                      key={c.countryId}
+                      id={c.countryId}
+                      name={names[String(c.countryId)] ?? c.tag}
+                      flag={c.flag}
+                      debt={c.debt}
+                      rate={stats.rate}
+                      ratio={stats.ratio}
+                      newRate={annualPercent(c.newLoanRate)}
+                      onSelect={setCountryId}
+                    />
                   );
                 })}
                 {!rows.length && (
@@ -610,3 +607,71 @@ function DebtObservation({
     </div>
   );
 }
+
+const BorrowerRow = memo(function BorrowerRow({
+  id,
+  name,
+  flag,
+  debt,
+  rate,
+  ratio,
+  newRate,
+  onSelect,
+}: {
+  id: number;
+  name: string;
+  flag: string | undefined;
+  debt: number;
+  rate: number | null;
+  ratio: number | null;
+  newRate: number | null;
+  onSelect: (id: number) => void;
+}) {
+  return (
+    <tr>
+      <td>
+        <button type="button" className={styles.goodHeading} onClick={() => onSelect(id)}>
+          <Eu5Flag flag={flag} size="sm" />
+          {name}
+        </button>
+      </td>
+      <td>{debtNumber(debt)}</td>
+      <td>{debtNumber(rate, "%")}</td>
+      <td>{debtNumber(ratio, "%")}</td>
+      <td>{debtNumber(newRate, "%")}</td>
+    </tr>
+  );
+});
+
+const DebtScopeSelect = memo(function DebtScopeSelect({
+  value,
+  update,
+  options,
+  label,
+}: {
+  value: Scope;
+  update: (scope: Scope) => void;
+  options: Record<string, string>;
+  label: string;
+}) {
+  return (
+    <label className={styles.field}>
+      <span>{label}</span>
+      <GameSelect value={value} onValueChange={(v) => update(v as Scope)}>
+        <GameSelect.Trigger aria-label={label}>
+          <GameSelect.Value className="min-w-0 truncate text-left" />
+        </GameSelect.Trigger>
+        <GameSelect.Content>
+          <GameSelect.Item value="world">World · all countries</GameSelect.Item>
+          {Object.entries(options)
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([id, name]) => (
+              <GameSelect.Item key={id} value={`id:${id}`}>
+                {name}
+              </GameSelect.Item>
+            ))}
+        </GameSelect.Content>
+      </GameSelect>
+    </label>
+  );
+});

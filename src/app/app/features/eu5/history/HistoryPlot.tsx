@@ -52,6 +52,7 @@ export function HistoryPlot({
     <div className="relative" style={{ height }}>
       <EChart
         option={option}
+        mergeUpdates
         style={{ height, width: "100%" }}
         onInit={(chart) => {
           chartRef.current = chart;

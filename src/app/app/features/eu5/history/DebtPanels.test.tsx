@@ -2,9 +2,10 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { EChartsOption } from "@/components/viz";
 import type { Snapshot } from "./types";
-const mocks = vi.hoisted(() => ({ options: [] as EChartsOption[] }));
+const mocks = vi.hoisted(() => ({ options: [] as EChartsOption[], deferred: [] as boolean[] }));
 vi.mock("@/components/viz", () => ({
-  EChart: ({ option }: { option: EChartsOption }) => {
+  EChart: ({ option, mergeUpdates }: { option: EChartsOption; mergeUpdates?: boolean }) => {
+    mocks.deferred.push(mergeUpdates === true);
     mocks.options.push(option);
     return <div data-chart />;
   },
@@ -45,6 +46,7 @@ const observation = (hash: string, date: string, debt: Snapshot["debt"]): Snapsh
 });
 beforeEach(() => {
   mocks.options = [];
+  mocks.deferred = [];
 });
 it("labels the saved date and puts the debt-weighted mean at the exact numeric annual rate", () => {
   const html = renderToStaticMarkup(
@@ -57,6 +59,7 @@ it("labels the saved date and puts the debt-weighted mean at the exact numeric a
   );
   expect(html).toContain("Current campaign · 1500-01-01");
   expect(html).toContain("not GDP");
+  expect(mocks.deferred.every(Boolean)).toBe(true);
   const histogram = mocks.options.find(
     (o) => Array.isArray(o.series) && o.series[0].type === "bar",
   )!;
