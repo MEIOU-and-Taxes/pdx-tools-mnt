@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LocalSessionProvider } from "@/features/account/SessionProvider";
 import { Tooltip } from "@/components/Tooltip";
 import { Toaster } from "@/components/Toaster";
-import { WebPage } from "@/components/layout";
+import { WebPage, FullscreenPage } from "@/components/layout";
 import { Home } from "@/components/landing/Home";
 import Eu5Ui from "@/features/eu5/Eu5Ui";
 import { useSaveFileInput } from "@/features/engine/engineStore";
@@ -14,7 +14,12 @@ const client = new QueryClient();
 
 function Viewer() {
   const input = useSaveFileInput();
-  if (input?.kind === "eu5") return <Eu5Ui save={input.data} />;
+  if (input?.kind === "eu5")
+    return (
+      <FullscreenPage>
+        <Eu5Ui save={input.data} />
+      </FullscreenPage>
+    );
   return (
     <WebPage>
       <Home />
