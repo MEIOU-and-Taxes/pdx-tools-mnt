@@ -37,6 +37,12 @@ jobs:
           touch assets/tokens/eu4.bin
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Convert the released EU5 map assets to tiles
+        run: |
+          for map in assets/game/eu5/*/map.zip; do
+            cargo run --locked -p pdx-assets -- retile-eu5-map "$map" "$map.tiles"
+            mv -- "$map.tiles" "$map"
+          done
       - name: Compile browser analysis modules
         run: |
           rustup target add wasm32-unknown-unknown

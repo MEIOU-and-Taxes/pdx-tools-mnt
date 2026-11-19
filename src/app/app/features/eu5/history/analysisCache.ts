@@ -1,11 +1,9 @@
-import type { SaveAnalysis } from "./analysisTypes";
-import { analyticalBuffers } from "./transferBuffers";
-import { validateSnapshot } from "./packedSnapshot";
+import type { Eu5Snapshot } from "./analysisTypes";
 
 // Change when the packed format changes. Production identities also include the
 // content-hashed WASM, token and game-bundle URLs supplied by the parser worker.
-export const ANALYSIS_CACHE_SCHEMA = "eu5-compiled-debt-v1";
-const DATABASE = "eu5-compiled-analysis";
+export const ANALYSIS_CACHE_SCHEMA = "eu5-campaign-analysis-v3";
+const DATABASE = "eu5-campaign-analysis";
 type CacheMetadata = { key: string; bytes: number; used: number };
 let database: Promise<IDBDatabase> | undefined;
 function openCache() {
@@ -103,13 +101,13 @@ export async function compiledCacheKey(
   return `${ANALYSIS_CACHE_SCHEMA}:${hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${revision}:${file.size}:${modified}:${sourceDigest}`)))}`;
 }
 
-export async function readCompiledAnalysis(key: string): Promise<SaveAnalysis | undefined> {
+export async function readCompiledAnalysis(key: string): Promise<Eu5Snapshot | undefined> {
   try {
     const db = await openCache();
     const tx = db.transaction(["entries", "metadata"], "readwrite");
     const done = finished(tx);
     const result = (await requestValue(tx.objectStore("entries").get(key))) as
-      | SaveAnalysis
+      | Eu5Snapshot
       | undefined;
     const metadataRequest = tx.objectStore("metadata").get(key);
     metadataRequest.onsuccess = () => {
@@ -118,29 +116,15 @@ export async function readCompiledAnalysis(key: string): Promise<SaveAnalysis | 
     };
     await done;
     if (!result) return;
-    validateSnapshot(result.snapshot);
-    if (
-      !(result.countryIds instanceof Uint32Array) ||
-      result.projection.layoutKey !== result.observation.layoutKey
-    )
+    if (!(result.data instanceof Uint8Array) || result.data.length === 0 || !result.descriptor?.id)
       return;
     return result;
   } catch {
     return;
   }
 }
-export function compiledAnalysisBytes(analysis: SaveAnalysis) {
-  return (
-    analyticalBuffers(analysis).reduce((sum, b) => sum + b.byteLength, 0) +
-    JSON.stringify([
-      analysis.observation,
-      analysis.countryNames,
-      analysis.snapshot.debt,
-      analysis.snapshot.strings,
-      analysis.overviews.strings,
-    ]).length *
-      2
-  );
+export function compiledAnalysisBytes(analysis: Eu5Snapshot) {
+  return analysis.data.byteLength;
 }
 async function cacheBudget() {
   try {
@@ -151,7 +135,7 @@ async function cacheBudget() {
   }
 }
 /** Structured cloning preserves typed arrays; a transaction commits before buffers transfer away. */
-export async function writeCompiledAnalysis(key: string, analysis: SaveAnalysis) {
+export async function writeCompiledAnalysis(key: string, analysis: Eu5Snapshot) {
   try {
     const db = await openCache(),
       budget = await cacheBudget(),

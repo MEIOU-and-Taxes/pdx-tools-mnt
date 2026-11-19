@@ -1,9 +1,11 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import type { ImportOptions } from "./importSnapshots";
+import type { ImportOptions } from "@/features/campaign/analysis/importScheduler";
+import type { Eu5Snapshot, Eu5SnapshotDescriptor } from "./analysisTypes";
 import type { Snapshot, SnapshotMetadata } from "./types";
 import { useHistory } from "./store";
-const mocks = vi.hoisted(() => ({ importTimeline: vi.fn() }));
-vi.mock("./importSnapshots", () => ({ importTimeline: mocks.importTimeline }));
+const mocks = vi.hoisted(() => ({ importBatch: vi.fn() }));
+vi.mock("@/features/campaign/analysis/importScheduler", () => ({ importBatch: mocks.importBatch }));
+vi.mock("./analysisClient", () => ({ eu5Analysis: { claim: () => {} } }));
 import { comparisonPoints, importComparison } from "./compareCampaigns";
 
 const snapshot = (campaignId: string, hash: string, date = "1500-01-01") =>
@@ -19,14 +21,13 @@ const snapshot = (campaignId: string, hash: string, date = "1500-01-01") =>
     development: 0,
   }) as SnapshotMetadata;
 beforeEach(() => {
-  mocks.importTimeline.mockReset();
+  mocks.importBatch.mockReset();
   useHistory.setState({
     snapshots: [],
     sources: {},
     progress: null,
     cancel: null,
     analysisEnabledCampaigns: [],
-    analysisPaused: true,
     issues: [],
   });
 });
@@ -42,48 +43,49 @@ it("keeps real calendar dates separate and aligns elapsed time to each campaign'
   expect(comparisonPoints(b, [20, 30], "elapsed")[1][0]).toBeCloseTo(20, 1);
   expect(comparisonPoints([], [], "elapsed")).toEqual([]);
 });
-it("filters known files before parsing and excludes current-campaign and duplicate hashes before publication", async () => {
-  const file = new File(["known"], "known.eu5", { lastModified: 1 });
-  useHistory.setState({
-    snapshots: [snapshot("current", "known")],
-    sources: {
-      original: { hash: "known", version: { size: file.size, lastModified: 1 } },
-    },
-  });
-  mocks.importTimeline.mockImplementation(async (files: File[], options: ImportOptions) => {
-    expect(files.map((f) => f.name)).toEqual(["new.eu5"]);
-    expect(options.acceptObservation!(snapshot("current", "different") as never)).toBe(false);
-    expect(options.acceptObservation!(snapshot("other", "known") as never)).toBe(false);
-    const other = snapshot("other", "new");
-    expect(options.acceptObservation!(other as never)).toBe(true);
-    expect(options.acceptObservation!(other as never)).toBe(false);
-    options.onSnapshots([other], [{ snapshot: other, file: files[0] }]);
-    return { errors: [], completed: 1 };
-  });
-  const result = await importComparison([file, new File(["new"], "new.eu5")], "current");
-  expect(result).toEqual({ campaigns: ["other"], skipped: 4, errors: 0 });
-  expect(useHistory.getState().snapshots.map((s) => s.hash)).toEqual(["known", "new"]);
-  expect(useHistory.getState().analysisEnabledCampaigns).toEqual(["other"]);
-  expect(useHistory.getState().analysisPaused).toBe(true);
-  expect(useHistory.getState().progress).toBeNull();
-  expect(useHistory.getState().cancel).toBeNull();
+const descriptor = (campaignId: string, id: string): Eu5SnapshotDescriptor => ({
+  id,
+  campaignId,
+  contentHash: id,
+  date: "1500-01-01",
+  dateSort: 15000101,
+  game: "eu5",
+  gameVersion: "1.4.0",
+  artifacts: [],
+  layoutKey: "layout",
+  world: { countryCount: 0, locationCount: 0, totalPopulation: 0 },
 });
-it("preserves completed observations when cancelled and clears the busy state", async () => {
-  mocks.importTimeline.mockImplementation(async (files: File[], options: ImportOptions) => {
-    const other = snapshot("other", "new");
-    options.onSnapshots([other], [{ snapshot: other, file: files[0] }]);
-    useHistory.getState().cancel!();
-    expect(options.signal.aborted).toBe(true);
-    throw new DOMException("Cancelled", "AbortError");
-  });
-  await expect(importComparison([new File(["new"], "new.eu5")], "current")).rejects.toMatchObject({
-    name: "AbortError",
-  });
-  expect(useHistory.getState().snapshots).toHaveLength(1);
+
+it("filters previously analyzed files and preserves the active campaign", async () => {
+  const file = new File(["known"], "known.eu5", { lastModified: 1 });
+  useHistory
+    .getState()
+    .add(
+      [descriptor("current", "known")],
+      { original: { snapshotId: "known", version: { size: file.size, lastModified: 1 } } },
+      { known: file.name },
+    );
+  mocks.importBatch.mockImplementation(
+    async (
+      files: File[],
+      _adapter,
+      _sink,
+      options: ImportOptions<Eu5SnapshotDescriptor, Eu5Snapshot>,
+    ) => {
+      expect(files.map((f) => f.name)).toEqual(["new.eu5"]);
+      const other = descriptor("other", "new");
+      options.onFileComplete({ status: "accepted", descriptor: other, file: files[0] });
+      return { failures: [], memoryFull: null };
+    },
+  );
+  const result = await importComparison([file, new File(["new"], "new.eu5")], "current");
+  expect(result).toEqual({ campaigns: ["other"], skipped: 1, errors: 0 });
+  expect(useHistory.getState().snapshots.map((s) => s.id)).toEqual(["known", "new"]);
+  expect(useHistory.getState().analysisEnabledCampaigns).toEqual(["other"]);
   expect(useHistory.getState().progress).toBeNull();
 });
 it("does not start a second import while another analysis is running", async () => {
   useHistory.setState({ progress: { completed: 0, total: 1, startedAt: 0 } });
   await expect(importComparison([], "current")).rejects.toThrow("Wait for the current analysis");
-  expect(mocks.importTimeline).not.toHaveBeenCalled();
+  expect(mocks.importBatch).not.toHaveBeenCalled();
 });

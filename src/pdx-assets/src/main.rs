@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use pdx_assets::{
     BuildInfoArgs, BundleArgs, CompileArgs, FetchGameArgs, ImagesArgs, PackArgs, SteamBuildsArgs,
 };
-use std::{io::IsTerminal, process::ExitCode};
+use std::{io::IsTerminal, path::PathBuf, process::ExitCode};
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, fmt::format::FmtSpan};
 
 // Avoid musl's default allocator due to lackluster performance
@@ -27,6 +27,11 @@ enum Commands {
     Images(ImagesArgs),
     Pack(PackArgs),
     SteamBuilds(SteamBuildsArgs),
+    /// Convert a legacy EU5 map bundle to the tiled format.
+    RetileEu5Map {
+        input: PathBuf,
+        output: PathBuf,
+    },
 }
 
 fn main() -> ExitCode {
@@ -50,6 +55,9 @@ fn main() -> ExitCode {
         Commands::Images(args) => args.run(),
         Commands::Pack(args) => args.run(),
         Commands::SteamBuilds(args) => args.run(),
+        Commands::RetileEu5Map { input, output } => {
+            pdx_assets::eu5::retile::retile_map(&input, &output).map(|()| ExitCode::SUCCESS)
+        }
     };
 
     match exit_code {

@@ -1,13 +1,29 @@
 import { useHistory } from "./history/store";
-import type { ActiveProfileIdentity, MapMode, UiCountryId } from "@/wasm/wasm_eu5";
+import type { AnalysisEntity } from "./history/analysisTypes";
+import type { MapMode, ActiveProfileIdentity, UiCountryId } from "@/wasm/wasm_eu5";
 import type { MapViewport } from "@pdx.tools/timelapse";
 import type { AppEngine } from "./ui-engine";
 import type { Eu5Store } from "./store/eu5Store";
 import type { LocationClickChangeEvent } from "./workers/map/map-module";
-import type { AnalysisEntity } from "./history/analysisTypes";
+import type { CountryIdentity } from "./carriedCountry";
 
 export { findCarriedCountry } from "./carriedCountry";
 export type { CountryIdentity } from "./carriedCountry";
+
+/**
+ * The selection by values that stay the same across saves. A country carries
+ * by its identity, a market by the id of its center location, and a location
+ * by its index, because the map does not change.
+ */
+export type CarriedSelection = {
+  target:
+    | { kind: "players" }
+    | { kind: "countries"; countries: CountryIdentity[] }
+    | { kind: "markets"; centers: number[] }
+    | { kind: "locations"; locations: number[] };
+  /** Kept only when the next save has it in the restored selection. */
+  focusedLocation: number | null;
+};
 
 export type StableProfile =
   | { kind: "country"; id?: UiCountryId; tag: string }
@@ -16,58 +32,39 @@ export type StableProfile =
 
 /** What the next EU5 save of the campaign keeps of the view. */
 export type Eu5Carry = {
-  /** Apply an analytical selection after the destination save has loaded. */
+  /** A click on a snapshot, to apply after the save of the snapshot loads. */
   inspection?: { click: LocationClickChangeEvent } | { entity: AnalysisEntity; remove?: boolean };
   profiles?: StableProfile[];
   mapMode: MapMode;
   viewport: MapViewport["viewport"] | null;
   insightPanel: { open: boolean; width: number };
-  /**
-   * The selection, by values that stay the same across saves. A country
-   * carries by its stable ID first, and falls back to the tag for legacy carry. A location carries by
-   * its index, because the map does not change. A market carries by its center.
-   */
-  selection:
-    | { kind: "players" }
-    | { kind: "country"; id?: UiCountryId; tag: string; focusedLocation: number | null }
-    | { kind: "market"; center: number }
-    | { kind: "location"; locationIdx: number }
-    | null;
+  selection: CarriedSelection | null;
 };
 
 export async function captureEu5Carry(store: Eu5Store): Promise<Eu5Carry> {
   const state = store.getState();
   const { appState, engine } = state;
-  const selection = appState.selectionState;
-  const selected = selection?.preset === "players" ? undefined : selection?.activeProfile;
   const viewed = useHistory.getState().viewedProfiles;
-  const requested = [...(selected ? [selected] : []), ...viewed];
-  const identities = requested.length ? await engine.trigger.getCampaignIdentities(requested) : [];
-  let carried: Eu5Carry["selection"] = selection?.preset === "players" ? { kind: "players" } : null;
-  if (selected) {
-    const stable = identities.shift();
-    if (stable?.kind === "country")
-      carried = { ...stable, focusedLocation: selection?.focusedLocation ?? null };
-    else if (stable) carried = stable;
-  }
   const profiles: StableProfile[] = [];
-  for (const stable of identities) {
-    if (!stable) break;
-    profiles.push(stable);
+  if (viewed.length) {
+    for (const profile of await engine.trigger.getCampaignIdentities(viewed)) {
+      if (!profile) break;
+      profiles.push(profile);
+    }
   }
   return {
-    profiles,
     mapMode: appState.currentMapMode,
     viewport: appState.mapViewport?.viewport ?? null,
     insightPanel: { open: state.insightPanelOpen, width: state.insightPanelWidth },
-    selection: carried,
+    selection: await engine.trigger.getCarriedSelection(),
+    ...(profiles.length ? { profiles } : {}),
   };
 }
 
 /**
  * Bring the view of the previous save into this one, before the player
- * sees it. A country that is gone from this save leaves the selection
- * empty.
+ * sees it. A country or market that is gone from this save leaves the
+ * selection.
  */
 export async function applyEu5Carry(
   engine: AppEngine,

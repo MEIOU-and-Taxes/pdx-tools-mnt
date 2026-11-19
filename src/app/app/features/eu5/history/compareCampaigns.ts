@@ -1,5 +1,8 @@
 import { fileVersion, sameFileVersion } from "@/features/campaign/types";
-import { importTimeline } from "./importSnapshots";
+import { analysisAdmission } from "@/features/campaign/analysis/admission";
+import { importBatch } from "@/features/campaign/analysis/importScheduler";
+import { eu5Analysis } from "./analysisClient";
+import { parserForImport } from "./parserAdapter";
 import { useHistory } from "./store";
 import type { Snapshot } from "./types";
 
@@ -21,69 +24,79 @@ export async function importComparison(files: File[], currentCampaign: string) {
   const state = useHistory.getState();
   if (state.progress) throw Error("Wait for the current analysis to finish.");
   if (files.length > 1000) throw Error("Select at most 1000 saves at a time.");
-  const known = new Map(state.snapshots.map((snapshot) => [snapshot.hash, snapshot]));
-  const seen = new Set(known.keys());
+  const lease = analysisAdmission().acquireImport();
+  eu5Analysis.claim(currentCampaign);
+  const controller = new AbortController();
+  const startedAt = performance.now();
+  const campaigns = new Set<string>();
+  const known = new Map(state.snapshots.map((snapshot) => [snapshot.id, snapshot]));
   const sources = Object.values(state.sources);
   const candidates = files.filter(
     (file) =>
       !sources.some(
         (source) =>
-          known.get(source.hash)?.fileName === file.name && sameFileVersion(source.version, file),
+          known.get(source.snapshotId)?.fileName === file.name &&
+          sameFileVersion(source.version, file),
       ),
   );
-  const controller = new AbortController();
-  const startedAt = performance.now();
-  const campaigns = new Set<string>();
-  let skipped = files.length - candidates.length;
+  const seen = new Set(known.keys());
+  const excluded = new Set<File>();
+  const failures: string[] = [];
   useHistory.setState({
     progress: { completed: 0, total: candidates.length, startedAt },
     cancel: () => controller.abort(),
     issues: [],
   });
   try {
-    const result = await importTimeline(candidates, {
-      signal: controller.signal,
-      concurrency: useHistory.getState().analysisWorkers || undefined,
-      useCompiledCache: useHistory.getState().analysisUseCache,
-      acceptObservation: (observation) => {
-        if (observation.campaignId === currentCampaign || seen.has(observation.hash)) {
-          skipped++;
-          return false;
-        }
-        seen.add(observation.hash);
-        return true;
-      },
-      onSnapshots: (snapshots, imported) => {
-        useHistory
-          .getState()
-          .add(
-            snapshots,
-            Object.fromEntries(
-              imported.map(({ snapshot, file }) => [
-                `comparison:${snapshot.hash}`,
-                { hash: snapshot.hash, version: fileVersion(file) },
-              ]),
-            ),
+    const result = await importBatch(
+      candidates,
+      parserForImport(state.analysisUseCache),
+      eu5Analysis,
+      {
+        signal: controller.signal,
+        lease,
+        concurrency: state.analysisWorkers || undefined,
+        refuseOutput: ({ descriptor }, file) => {
+          if (descriptor.campaignId !== currentCampaign && !seen.has(descriptor.id)) return null;
+          excluded.add(file);
+          return "Already analyzed, or from the open campaign.";
+        },
+        onFileComplete: (completion) => {
+          if (completion.status === "failed" && !excluded.has(completion.file)) {
+            failures.push(`${completion.file.name}: ${completion.error}`);
+          }
+          if (!("descriptor" in completion)) return;
+          const { descriptor } = completion;
+          if (completion.status === "duplicate") excluded.add(completion.file);
+          seen.add(descriptor.id);
+          campaigns.add(descriptor.campaignId);
+          const history = useHistory.getState();
+          history.add(
+            [descriptor],
+            {
+              [`comparison:${descriptor.id}`]: {
+                snapshotId: descriptor.id,
+                version: fileVersion(completion.file),
+              },
+            },
+            { [descriptor.id]: completion.file.name },
           );
-        for (const snapshot of snapshots) {
-          campaigns.add(snapshot.campaignId);
-          useHistory.setState((state) => ({
-            analysisEnabledCampaigns: [
-              ...new Set([...state.analysisEnabledCampaigns, snapshot.campaignId]),
-            ],
-          }));
-        }
+          history.enableAnalysis(descriptor.campaignId);
+        },
+        onProgress: ({ completed, total, fileName }) =>
+          useHistory.setState({ progress: { completed, total, fileName, startedAt } }),
       },
-      onProgress: (completed, total, fileName, phase) =>
-        useHistory.setState({
-          progress: { completed, total, fileName, phase, startedAt },
-        }),
-    });
+    );
     useHistory.setState({
-      issues: result.errors.map((error) => `${error.fileName}: ${error.error}`),
+      issues: [...failures, ...(result.memoryFull ? [result.memoryFull] : [])],
     });
-    return { campaigns: [...campaigns], skipped, errors: result.errors.length };
+    return {
+      campaigns: [...campaigns],
+      skipped: files.length - candidates.length + excluded.size,
+      errors: failures.length,
+    };
   } finally {
+    lease.release();
     useHistory.setState({ progress: null, cancel: null });
   }
 }

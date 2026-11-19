@@ -548,12 +548,12 @@ function DebtObservation({
             style={{ height: 300 }}
             gpuBars
             mergeUpdates
-            onInit={(chart) =>
+            onInit={(chart) => {
               chart.on("click", (event) => {
                 const data = event.data as { band?: number } | undefined;
                 if (typeof data?.band === "number") setBand(data.band);
-              })
-            }
+              });
+            }}
           />
           {summary.debt > 0 && summary.rate == null && (
             <p className={styles.help}>

@@ -14,19 +14,19 @@ const sizeClasses = {
   xs: {
     wrapper: "gap-[5px] h-[18px]",
     swatch: "w-[12px] h-[9px]",
-    tag: "text-[9.5px]",
-    name: "text-[11px]",
+    tag: "text-[12px]",
+    name: "text-[12px]",
   },
   sm: {
     wrapper: "gap-1.5 h-[22px]",
     swatch: "w-[14px] h-[10px]",
-    tag: "text-[10px]",
+    tag: "text-[12px]",
     name: "text-[12px]",
   },
   md: {
     wrapper: "gap-2 h-7",
     swatch: "w-[18px] h-3",
-    tag: "text-[10.5px]",
+    tag: "text-[12px]",
     name: "text-[13px]",
   },
 };
@@ -54,7 +54,7 @@ function EntitySwatch({
   return (
     <span
       className={cx(
-        "relative shrink-0 rounded-[1px] border border-black/30",
+        "relative shrink-0 rounded-[1px] border border-game-rim",
         isPlayer && "ring-2 ring-game-ink-100 ring-offset-1 ring-offset-game-page",
         className,
       )}
@@ -130,12 +130,11 @@ function LinkBody({
       type="button"
       onClick={(event) => {
         event.stopPropagation();
-        if (event.altKey) {
-          if (preview) void openEntity(kind, id, name, anchorLocationIdx, backLabel, true);
-          else onAltActivate();
+        if (event.altKey && !preview) {
+          onAltActivate();
           return;
         }
-        void openEntity(kind, id, name, anchorLocationIdx, backLabel);
+        void openEntity(kind, id, name, anchorLocationIdx, backLabel, event.altKey);
       }}
       {...hoverProps}
       className={cx(
@@ -187,14 +186,16 @@ export function CountryLink({ country, ...props }: SharedProps & { country: Coun
           colorHex={country.colorHex}
           size={flagSizeByLinkSize[props.size ?? "sm"]}
           className={cx(
-            "shrink-0 rounded-[1px] border border-black/30",
+            "shrink-0 rounded-[1px] border border-game-rim",
             country.isPlayer && "ring-2 ring-game-ink-100 ring-offset-1 ring-offset-game-page",
           )}
         />
       }
       tag={tag}
       name={country.country.name}
-      onAltActivate={() => void engine.commands.removeCountry(country.country.key)}
+      onAltActivate={() =>
+        void engine.commands.changeSelection("remove", "countries", [country.country.key])
+      }
     />
   );
 }
@@ -212,7 +213,9 @@ export function MarketLink({ market, ...props }: SharedProps & { market: MarketR
       colorHex={market.colorHex}
       isPlayer={false}
       name={market.market.name}
-      onAltActivate={() => void engine.commands.removeMarket(market.market.key)}
+      onAltActivate={() =>
+        void engine.commands.changeSelection("remove", "markets", [market.market.key])
+      }
     />
   );
 }

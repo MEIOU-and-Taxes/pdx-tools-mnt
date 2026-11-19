@@ -1,5 +1,6 @@
-import type { LocationProfile } from "@/wasm/wasm_eu5";
 import { formatFloat } from "@/lib/format";
+import type { LocationProfile } from "@/wasm/wasm_eu5";
+import { Figure } from "../../../components/Figure";
 import { SectionTitle } from "../../../components";
 
 interface Props {
@@ -30,7 +31,7 @@ export function LocationEconomyTab({ profile }: Props) {
               </span>
             </span>
             <span className="font-game-num text-xs text-game-ink-300">
-              {formatFloat(b.level, 0)}
+              <Figure value={b.level} form="level" />
             </span>
           </div>
         ))}

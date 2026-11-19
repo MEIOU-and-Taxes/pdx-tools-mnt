@@ -136,7 +136,8 @@ export function SaveHistory({
   const labels = useMemo(() => {
     const result: Record<string, string> = {};
     for (const row of metadata)
-      for (const [center, name] of Object.entries(row.marketLabels)) result[center] = human(name);
+      for (const [center, name] of Object.entries(row.marketLabels ?? {}))
+        result[center] = human(name);
     return result;
   }, [metadata]);
   const focusCenters = useCountryMarketCenters(playthroughId ?? "", focusTag, visible);

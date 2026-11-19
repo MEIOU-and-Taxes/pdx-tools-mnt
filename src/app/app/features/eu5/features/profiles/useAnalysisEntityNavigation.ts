@@ -1,6 +1,6 @@
 import { useMapHistory } from "../../history/context";
 import { usePanelNav, entityProfileEntry, locationProfileEntry } from "./PanelNavContext";
-import { usePanToEntity } from "../../usePanToEntity";
+import { useJumpToEntity } from "../../useJumpToEntity";
 import { useCampaign } from "@/features/campaign/CampaignProvider";
 import { activeEu5Store } from "../../store";
 import { openPreview, usePreviewSession } from "../../history/previewSession";
@@ -9,7 +9,7 @@ export function useAnalysisEntityNavigation() {
   const history = useMapHistory(),
     campaign = useCampaign(),
     nav = usePanelNav(),
-    pan = usePanToEntity();
+    pan = useJumpToEntity();
   return async (
     kind: "country" | "market" | "location",
     id: number,

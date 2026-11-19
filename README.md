@@ -4,8 +4,9 @@ This derivative preserves the EU5 campaign analysis work from
 [`mak8427/pdx-tools`](https://github.com/mak8427/pdx-tools), starting at
 `f734d7a946fe04f22ff654cba93d66c95cbdc2ef`. Original project:
 [PDX Tools](https://github.com/pdx-tools/pdx-tools). The original license and
-copyright notices are retained. EU5 save parsing uses the pinned
-[M&T Jomini fork](https://github.com/mak8427/jomini/tree/codex/mnt-save-data).
+copyright notices are retained. The vendored EU5 parser combines Jomini revision
+`8ca17c58640d432ef77b00d3dae32fc72196c106` with the
+[M&T save fields](https://github.com/mak8427/jomini/commit/bab7ac81708f3c8f1b5afad39f8d166fae07f8c8).
 
 ## Compile M&T game data
 
@@ -25,7 +26,16 @@ including `REPLACE:`/`INJECT:` goods, building names, extra colors, icons and
 English localization. Unsupported `replace_paths` configurations fail explicitly.
 
 The resulting `eu5/1.4/game.zip`, `map.zip` and `loc-en.zip` bundles feed the
-existing EU5 viewer. Follow the contributor setup below to build the viewer;
+existing EU5 viewer. An existing map bundle can be repacked into tiles without
+the game install:
+
+```sh
+cargo run --locked -p pdx-assets -- retile-eu5-map /path/to/old/map.zip /path/to/new/map.zip
+```
+
+Use the converted `map.zip` alongside the existing `game.zip` and `loc-en.zip`.
+Campaign analysis caches regenerate from the original saves in the new binary format.
+Follow the contributor setup below to build the viewer;
 keep tokens, compiled assets and private saves local.
 
 RGO totals and material breakdowns use M&T RGO building levels when present.

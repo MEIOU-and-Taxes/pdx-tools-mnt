@@ -1,0 +1,31 @@
+[package]
+name = "eu5save"
+version = "0.1.0"
+authors = ["Nick Babcock <nbabcock19@hotmail.com>"]
+edition = "2024"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/rakaly/jomini"
+publish = false
+description = "Ergonomically work with Europa Universalis V saves (debug and ironman)"
+keywords = ["eu5", "ironman"]
+categories = ["parsing"]
+
+[features]
+default = []
+tsify = ["dep:tsify", "dep:wasm-bindgen"]
+zstd_c = ["jomini/zstd_c"]
+zstd_rust = ["jomini/zstd_rust"]
+
+[dependencies]
+arena-serde = { workspace = true }
+bumpalo = { workspace = true, features = ["collections"] }
+jomini = { workspace = true, features = ["envelope"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tsify = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+
+[dev-dependencies]
+highway = { workspace = true }
+rstest = { workspace = true }

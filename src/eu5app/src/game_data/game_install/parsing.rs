@@ -517,6 +517,15 @@ trade_office = {
     }
 
     #[test]
+    fn test_parse_localization_keeps_a_colon_in_the_text() {
+        let data = "l_english:\n adirondacks: \"Ratiron:tacks\"\n";
+        let parsed: FxHashMap<String, String> = parse_localization(data)
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        assert_eq!(parsed.get("adirondacks").unwrap(), "Ratiron:tacks");
+    }
+
+    #[test]
     fn test_parse_localization_keeps_lowercase_keys() {
         let data = r#"l_english:
  wool: "Wool"

@@ -1,10 +1,21 @@
 import type { ActiveProfileIdentity } from "@/wasm/wasm_eu5";
-import { create } from "zustand";
+import type { WorldSummary } from "@/wasm/wasm_eu5";
 import type { FileVersion } from "@/features/campaign/types";
+import { create } from "zustand";
+import { compareDescriptors } from "@/features/campaign/analysis/descriptor";
+import type { SourceAssociation } from "@/features/campaign/analysis/descriptor";
 import type { ImportProgressState } from "./importTiming";
-import type { SnapshotMetadata } from "./types";
+import type { Eu5SnapshotDescriptor } from "./analysisTypes";
 
-export type SourceObservation = { hash: string; version: FileVersion };
+export type HistoryDescriptor = Eu5SnapshotDescriptor & {
+  hash: string;
+  version: string;
+  fileName: string;
+  world: WorldSummary;
+};
+
+export type SourceObservation = SourceAssociation;
+
 type HistoryState = {
   viewedProfiles: ActiveProfileIdentity[];
   setViewedProfiles: (profiles: ActiveProfileIdentity[]) => void;
@@ -14,33 +25,38 @@ type HistoryState = {
   showSection: (section: "map" | "debt") => void;
   panelOpen: boolean;
   showPanel: (open: boolean) => void;
-  playbackSpeed: number;
-  setPlaybackSpeed: (speed: number) => void;
-  snapshots: SnapshotMetadata[];
-  sources: Record<string, SourceObservation>;
-  analyzingEntryIds: readonly string[];
-  analysisEnabledCampaigns: readonly string[];
-  analysisWorkers: number;
   analysisUseCache: boolean;
   setAnalysisUseCache: (useCache: boolean) => void;
+  analysisWorkers: number;
   setAnalysisWorkers: (workers: number) => void;
+  playbackSpeed: number;
+  setPlaybackSpeed: (speed: number) => void;
+  snapshots: HistoryDescriptor[];
+  sources: Record<string, SourceAssociation>;
+  analyzingEntryIds: readonly string[];
+  failedSources: Record<string, { version: FileVersion | null; error: string }>;
+  analysisEnabledCampaigns: readonly string[];
   enableAnalysis: (campaignId: string) => void;
-  analysisPaused: boolean;
+  /** The campaigns that do not start imports until the player resumes them. */
   analysisPausedCampaigns: string[];
+  pauseAnalysis: (campaignId: string) => void;
   progress: ImportProgressState | null;
   issues: string[];
   cancel: (() => void) | null;
-  add: (snapshots: SnapshotMetadata[], sources?: Record<string, SourceObservation>) => void;
+  add: (
+    snapshots: Eu5SnapshotDescriptor[],
+    sources?: Record<string, SourceAssociation>,
+    fileNames?: Record<string, string>,
+  ) => void;
+  /** Remove the snapshots and the source associations to them. */
+  removeSnapshots: (campaignId?: string) => void;
 };
 
 export function isAnalysisPaused(
-  state: Pick<HistoryState, "analysisPaused" | "analysisPausedCampaigns">,
+  state: Pick<HistoryState, "analysisPausedCampaigns">,
   playthroughId: string | null | undefined,
 ) {
-  return (
-    state.analysisPaused ||
-    (!!playthroughId && state.analysisPausedCampaigns.includes(playthroughId))
-  );
+  return !!playthroughId && state.analysisPausedCampaigns.includes(playthroughId);
 }
 
 /** Historical data only. Campaign navigation owns files and the active save. */
@@ -54,36 +70,59 @@ export const useHistory = create<HistoryState>()((set) => ({
   showSection: (section) => set({ section, panelOpen: true }),
   panelOpen: false,
   showPanel: (panelOpen) => set({ panelOpen }),
+  analysisUseCache: true,
+  setAnalysisUseCache: (analysisUseCache) => set({ analysisUseCache }),
+  analysisWorkers: 0,
+  setAnalysisWorkers: (analysisWorkers) => set({ analysisWorkers }),
   playbackSpeed: 1,
   setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
   snapshots: [],
   sources: {},
   analyzingEntryIds: [],
+  failedSources: {},
   analysisEnabledCampaigns: [],
-  analysisWorkers: 0,
-  analysisUseCache: true,
-  setAnalysisUseCache: (analysisUseCache) => set({ analysisUseCache }),
-  setAnalysisWorkers: (analysisWorkers) => set({ analysisWorkers }),
   enableAnalysis: (campaignId) =>
     set((state) => ({
       analysisEnabledCampaigns: [...new Set([...state.analysisEnabledCampaigns, campaignId])],
-      analysisPaused: false,
       analysisPausedCampaigns: state.analysisPausedCampaigns.filter((id) => id !== campaignId),
     })),
-  analysisPaused: false,
   analysisPausedCampaigns: [],
+  pauseAnalysis: (campaignId) =>
+    set((state) =>
+      state.analysisPausedCampaigns.includes(campaignId)
+        ? state
+        : { analysisPausedCampaigns: [...state.analysisPausedCampaigns, campaignId] },
+    ),
   progress: null,
   issues: [],
   cancel: null,
-  add: (snapshots, sources = {}) =>
+  add: (snapshots, sources = {}, fileNames = {}) =>
     set((state) => {
-      const byHash = new Map(state.snapshots.map((snapshot) => [snapshot.hash, snapshot]));
-      for (const snapshot of snapshots) byHash.set(snapshot.hash, snapshot);
+      const byId = new Map(state.snapshots.map((snapshot) => [snapshot.id, snapshot]));
+      for (const snapshot of snapshots) {
+        byId.set(snapshot.id, {
+          ...snapshot,
+          hash: snapshot.id,
+          version: snapshot.gameVersion,
+          fileName: fileNames[snapshot.id] ?? byId.get(snapshot.id)?.fileName ?? "",
+        });
+      }
+      const failedSources = { ...state.failedSources };
+      for (const id of Object.keys(sources)) delete failedSources[id];
       return {
-        snapshots: [...byHash.values()].sort(
-          (a, b) => a.dateSort - b.dateSort || a.hash.localeCompare(b.hash),
-        ),
+        failedSources,
+        snapshots: [...byId.values()].sort(compareDescriptors),
         sources: { ...state.sources, ...sources },
       };
+    }),
+  removeSnapshots: (campaignId) =>
+    set((state) => {
+      if (campaignId === undefined) return { snapshots: [], sources: {} };
+      const snapshots = state.snapshots.filter((snapshot) => snapshot.campaignId !== campaignId);
+      const ids = new Set(snapshots.map((snapshot) => snapshot.id));
+      const sources = Object.fromEntries(
+        Object.entries(state.sources).filter(([, source]) => ids.has(source.snapshotId)),
+      );
+      return { snapshots, sources };
     }),
 }));

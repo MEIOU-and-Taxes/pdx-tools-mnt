@@ -6,16 +6,12 @@ import init, {
   Eu5WasmGameBundle,
   Eu5WasmLocalizationBundle,
 } from "@/wasm/wasm_eu5";
-import type { SaveAnalysisImport } from "@/wasm/wasm_eu5";
 import wasmUrl from "@/wasm/wasm_eu5_bg.wasm?url";
 import tokenUrl from "../../../../../../assets/tokens/eu5.bin?url";
 import { getBundleUrls, resolveBundleVersion } from "../bundleUrls";
 import { compiledCacheKey, readCompiledAnalysis, writeCompiledAnalysis } from "./analysisCache";
 import { analysisBundleIdentity } from "../bundleUrls";
-import { packSnapshot } from "./packedSnapshot";
-import { packOverviews } from "./packedOverview";
-import { analyticalBuffers } from "./transferBuffers";
-import type { MapProjection, SaveAnalysis } from "./analysisTypes";
+import type { Eu5Snapshot } from "./analysisTypes";
 registerWebWorker({ self: globalThis });
 let initialized: Promise<unknown> | undefined;
 const initialize = () =>
@@ -77,7 +73,7 @@ export async function parseImport(
   file: File,
   report?: (progress: ParseProgress) => void,
   useCompiledCache = true,
-): Promise<SaveAnalysis> {
+): Promise<Eu5Snapshot> {
   let cacheKey: string | undefined;
   try {
     if (useCompiledCache) {
@@ -95,10 +91,8 @@ export async function parseImport(
       );
       const cached = await readCompiledAnalysis(cacheKey);
       if (cached) {
-        cached.observation.fileName = file.name;
-        cached.snapshot.fileName = file.name;
         report?.({ stage: "Loaded compiled analysis from disk", cache: "hit" });
-        return transfer(cached, analyticalBuffers(cached));
+        return transfer(cached, [cached.data.buffer]);
       }
     }
   } catch {
@@ -116,38 +110,7 @@ export async function parseImport(
     data = await assets(`${meta.version.major}.${meta.version.minor}`);
     consumed = true;
     report?.({ stage: "Parsing save and building analysis" });
-    const raw = parser.parse_import(data.game, data.localization) as SaveAnalysisImport & {
-      projection: MapProjection;
-    };
-    const marketLabels: Record<string, string> = {};
-    for (const market of raw.snapshot.markets)
-      marketLabels[market.center] =
-        market.centerName?.replaceAll("_", " ") || `Location ${market.center}`;
-    const names =
-      raw.countryNames instanceof Map ? Object.fromEntries(raw.countryNames) : raw.countryNames;
-    report?.({ stage: "Packing compiled analysis" });
-    const result: SaveAnalysis = {
-      observation: {
-        hash: `eu5:${raw.hash}`,
-        campaignId: raw.snapshot.campaignId,
-        date: raw.snapshot.date,
-        dateSort: raw.snapshot.dateSort,
-        version: raw.snapshot.version,
-        layoutKey: raw.projection.layoutKey,
-        fileName: file.name,
-        world: raw.overviews.world,
-      },
-      snapshot: packSnapshot({
-        ...raw.snapshot,
-        hash: `eu5:${raw.hash}`,
-        fileName: file.name,
-        marketLabels,
-      }),
-      projection: raw.projection,
-      overviews: packOverviews(raw.overviews),
-      countryIds: Uint32Array.from(raw.countryIds),
-      countryNames: names,
-    };
+    const result = parser.parse_import(data.game, data.localization);
     if (cacheKey) {
       report?.({ stage: "Saving compiled analysis to disk" });
       const saved = await writeCompiledAnalysis(cacheKey, result);
@@ -158,7 +121,7 @@ export async function parseImport(
         ...(saved ? {} : { cache: "unavailable" as const }),
       });
     }
-    return transfer(result, analyticalBuffers(result));
+    return transfer(result, [result.data.buffer]);
   } finally {
     if (!consumed) parser.free();
   }

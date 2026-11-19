@@ -4,6 +4,7 @@ members = [
   "src/api",
   "src/applib",
   "src/bench",
+  "src/campaign-analysis",
   "src/eu4-achievements",
   "src/eu4game",
   "src/eu4game-data",
@@ -37,12 +38,13 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0"
 applib = { path = "src/applib", default-features = false }
-arena-serde = { git = "https://github.com/mak8427/jomini.git", rev = "bab7ac8" }
+arena-serde = { git = "https://github.com/rakaly/jomini.git" }
 attohttpc = "0.30.1"
 axum = "0.8.8"
 base64 = "0.22"
 bumpalo = "3.20"
 bytemuck = { version = "1.25" }
+campaign-analysis = { path = "src/campaign-analysis" }
 ck3save = { git = "https://github.com/rakaly/jomini.git" }
 clap = "4.6"
 criterion = { version = "0.8", default-features = false }
@@ -53,7 +55,7 @@ eu4game = { path = "src/eu4game", default-features = false }
 eu4game-data = { path = "src/eu4game-data", default-features = false }
 eu4save = { git = "https://github.com/rakaly/jomini.git", default-features = false }
 eu5app = { path = "src/eu5app", default-features = false }
-eu5save = { git = "https://github.com/mak8427/jomini.git", rev = "bab7ac8", default-features = false }
+eu5save = { path = "vendor/eu5save", default-features = false }
 flatbuffers = "25.12.19"
 flate2 = { version = "1.1.9", default-features = false }
 futures-channel = { version = "0.3.32" }

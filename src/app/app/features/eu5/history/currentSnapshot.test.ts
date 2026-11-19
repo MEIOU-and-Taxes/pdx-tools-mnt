@@ -15,7 +15,7 @@ const current = {
   dateSort: 13600101,
   remote: false,
   file,
-  source: { hash: "active", version: { size: file.size, lastModified: file.lastModified } },
+  source: { snapshotId: "active", version: { size: file.size, lastModified: file.lastModified } },
 };
 
 it("chooses the active source hash instead of the first observation on the same date", () => {

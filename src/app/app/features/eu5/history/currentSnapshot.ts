@@ -27,7 +27,7 @@ export function currentHistorySnapshot(
       snapshot.campaignId === current.campaignId &&
       snapshot.version === current.version &&
       snapshot.dateSort === current.dateSort &&
-      (current.remote || snapshot.hash === current.source?.hash),
+      (current.remote || snapshot.hash === current.source?.snapshotId),
   );
   return matches.length === 1 ? matches[0] : undefined;
 }

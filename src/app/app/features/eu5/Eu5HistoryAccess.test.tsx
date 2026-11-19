@@ -24,6 +24,7 @@ vi.mock("./features/profiles/useEu5Trigger", () => ({
 }));
 vi.mock("./store", async (original) => ({
   ...(await original<typeof Eu5Store>()),
+  useEu5Input: () => ({ kind: "file" }),
   useEu5MapMode: () => "political",
   useEu5SaveDate: () => ({ year: 1337, month: 1, day: 1 }),
   useEu5PlaythroughId: () => "campaign",

@@ -6,7 +6,7 @@ import {
   writeCompiledAnalysis,
   compiledCacheStatus,
 } from "./analysisCache";
-import type { SaveAnalysis } from "./analysisTypes";
+import type { Eu5Snapshot } from "./analysisTypes";
 beforeEach(() => vi.stubGlobal("crypto", webcrypto));
 afterEach(() => vi.unstubAllGlobals());
 it("keys identical file contents identically even after renaming with the same source version", async () => {
@@ -43,7 +43,7 @@ it("invalidates a replaced save with changed file version or guarded contents", 
 it("degrades cleanly when persistent storage is unavailable", async () => {
   vi.stubGlobal("indexedDB", undefined);
   expect(await readCompiledAnalysis("missing")).toBeUndefined();
-  expect(await writeCompiledAnalysis("entry", {} as SaveAnalysis)).toBe(false);
+  expect(await writeCompiledAnalysis("entry", {} as Eu5Snapshot)).toBe(false);
   expect(await compiledCacheStatus()).toEqual({ available: false, count: 0, bytes: 0 });
 });
 

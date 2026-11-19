@@ -1,5 +1,5 @@
+use super::analysis::InsightContext;
 use super::*;
-use crate::analysis::InsightContext;
 
 impl<'bump> Eu5Workspace<'bump> {
     fn analysis_context(&self) -> InsightContext<'_, 'bump> {

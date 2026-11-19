@@ -1,8 +1,8 @@
+import type { ActiveProfileIdentity } from "@/wasm/wasm_eu5";
 import type { Eu5Carry } from "./campaignCarry";
 import { wrap, transfer, proxy, releaseProxy } from "comlink";
 import type { Remote } from "comlink";
 import type {
-  ActiveProfileIdentity,
   GradientConfig,
   GradientPalette,
   DisplayData,
@@ -253,6 +253,7 @@ export type SaveQueries = Pick<
   | "getControlInsight"
   | "getPoliticalWorldScoreboard"
   | "getPoliticalDefaultCountryAnchor"
+  | "getSelectionTarget"
   | "searchEntities"
   | "getCountryIdentity"
   | "findCountry"
@@ -264,12 +265,7 @@ export type SaveQueries = Pick<
 /** Changes to the selection, focus and highlight of the open save. */
 export type SaveCommands = Pick<
   SaveEngine,
-  | "selectCountry"
-  | "addCountry"
-  | "removeCountry"
-  | "selectMarket"
-  | "addMarket"
-  | "removeMarket"
+  | "changeSelection"
   | "setFocusedLocation"
   | "clearFocus"
   | "clearFocusOrSelection"
@@ -363,8 +359,8 @@ function saveWorker(saveEngine: SaveEngine, mapEngine: MapEngine, gameWorker: Eu
     getMapLayoutKey: () => save.getMapLayoutKey(),
     connectMapFrames: (id: string, port: MessagePort | null) =>
       save.connectMapFrames(id, port ? transfer(port, [port]) : null),
-    presentOverlay: (hash: string, mode: MapMode, token: number) =>
-      save.presentOverlay(hash, mode, token),
+    presentOverlay: (snapshotId: string, mode: MapMode, token: number) =>
+      save.presentOverlay(snapshotId, mode, token),
     stopOverlay: () => save.stopOverlay(),
     // The overlay and the input gate belong to the workers, not to this save.
     clearOverlay: (token: number) => mapEngine.clearOverlay(token),
@@ -383,6 +379,7 @@ function saveWorker(saveEngine: SaveEngine, mapEngine: MapEngine, gameWorker: Eu
     getTimeline: (): Promise<TimelineData> => save.getTimeline(),
     setTimelineDate: (date: Eu5DateComponents): Promise<TimelineChange> =>
       save.setTimelineDate(date),
+    getCarriedSelection: () => save.getCarriedSelection(),
     getCampaignIdentities: (profiles: ActiveProfileIdentity[]) =>
       save.getCampaignIdentities(profiles),
     restoreCampaignView: (carry: Eu5Carry) => save.restoreCampaignView(carry),
@@ -394,8 +391,8 @@ function saveWorker(saveEngine: SaveEngine, mapEngine: MapEngine, gameWorker: Eu
     }): Promise<TimelapseFrameLayout> => {
       return mapEngine.beginTimelapseRecording(options);
     },
-    recordTimelapseFrame: (date: Eu5DateComponents): Promise<TimelapseFrameTiming> => {
-      return mapEngine.recordTimelapseFrame(date);
+    recordTimelapseFrame: (date: Eu5DateComponents, repeat = 1): Promise<TimelapseFrameTiming> => {
+      return mapEngine.recordTimelapseFrame(date, repeat);
     },
     finishTimelapseRecording: (): Promise<TimelapseFile> => {
       return mapEngine.finishTimelapseRecording();
@@ -408,7 +405,7 @@ function saveWorker(saveEngine: SaveEngine, mapEngine: MapEngine, gameWorker: Eu
       return await mapEngine.generateWorldScreenshot(fullResolution, overlayData);
     },
     setOwnerBorders: (enabled: boolean) => {
-      mapEngine.execCommands([{ kind: "setOwnerBorders", enabled }, { kind: "render" }]);
+      mapEngine.execCommands([{ kind: "setOwnerBorders", enabled }]);
     },
 
     startHoverTracking: () => mapEngine.startHoverTracking(),
@@ -442,15 +439,15 @@ function saveWorker(saveEngine: SaveEngine, mapEngine: MapEngine, gameWorker: Eu
       if (lastViewport !== null) callback(lastViewport);
     },
 
-    panToLocation: async (
+    jumpToLocation: async (
       locationIdx: number,
       insets: { left: number; right: number; top: number; bottom: number },
     ) => {
-      // Like a command, a pan on a released save does nothing.
+      // Like a command, a jump on a released save does nothing.
       if (isReleased) return;
       const colorId = await save.getLocationColorId(locationIdx);
       if (colorId != null) {
-        await mapEngine.pan_to_color_id(colorId, insets);
+        await mapEngine.jumpToColorId(colorId, insets);
       }
     },
   };

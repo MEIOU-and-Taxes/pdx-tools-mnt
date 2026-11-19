@@ -1,8 +1,8 @@
 use eu5save::models::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "tsify", derive(tsify::Tsify))]
 pub struct MarketObservation {
@@ -18,7 +18,7 @@ pub struct MarketObservation {
     pub total_taken: Option<f64>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "tsify", derive(tsify::Tsify))]
 pub struct CountryObservation {
@@ -45,7 +45,7 @@ pub struct CountryObservation {
     pub market_centers: Vec<u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "tsify", derive(tsify::Tsify))]
 pub struct SaveSnapshot {
@@ -130,7 +130,7 @@ pub fn extract(game: &Gamestate<'_>) -> SaveSnapshot {
                 country_id: owner.id().value(),
                 tag: tag.to_owned(),
                 income: data
-                    .map(|d| d.estimated_monthly_income_trade_and_tax)
+                    .map(|d| d.monthly_tax_and_trade_income())
                     .and_then(finite)
                     .unwrap_or(0.0),
                 great_power_rank: data

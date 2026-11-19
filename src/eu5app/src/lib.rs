@@ -1,3 +1,5 @@
+pub mod analysis;
+mod analysis_mnt;
 mod color;
 pub mod debt;
 pub mod entity_profile;
@@ -26,8 +28,8 @@ pub use presentation::{
 
 pub use entity_profile::EntityKind;
 pub use selection::{
-    ClickOutcome, GroupId, GroupingTable, LocationData, SelectionPreset, SelectionState,
-    SelectionSummary, single_entity_scope,
+    ClickOutcome, GroupId, GroupingTable, LocationData, SelectionOp, SelectionPreset, SelectionSet,
+    SelectionState, SelectionSummary, SelectionTarget, single_entity_scope,
 };
 pub use session::{
     Eu5AnySaveLoader, Eu5DateComponents, Eu5DebugSaveLoader, Eu5LoadError, Eu5LoadedSave,
@@ -44,4 +46,4 @@ pub use overlay::{OverlayBodyConfig, OverlayTable, TableCell};
 pub use save_hash::SaveCheckSummer;
 
 pub mod snapshot;
-pub use session::workspace::analysis;
+pub use session::workspace::analysis::{OverviewData, analysis_country_names, extract_overviews};

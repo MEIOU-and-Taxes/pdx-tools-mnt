@@ -1,3 +1,5 @@
+import { useGameTheme } from "@/components/GameThemeProvider";
+import { chartTheme } from "./echartsTheme";
 import { CHART_UPDATE_DURATION, CHART_UPDATE_EASING } from "./chartMotion";
 import { captureSankey, animateSankey } from "./sankeyTransitions";
 import { createGpuScatter, gpuScatterOption } from "./gpuScatter";
@@ -97,9 +99,9 @@ export type EChartsOption = ComposeOption<
 >;
 
 export interface EChartProps {
-  option: EChartsOption;
+  option: EChartsOption | ((chart: echarts.ECharts) => EChartsOption);
   style?: React.CSSProperties;
-  onInit?: (chart: echarts.ECharts) => void;
+  onInit?: (chart: echarts.ECharts) => void | (() => void);
   className?: string;
   /** Keep series identities for animated updates and retain chart zoom. */
   mergeUpdates?: boolean;
@@ -198,13 +200,12 @@ export const EChart = memo(function EChart({
   const gpuRef = useRef<ReturnType<typeof createGpuScatter>>(undefined);
   const barsRef = useRef<ReturnType<typeof createGpuBars>>(undefined);
   const barsFailed = useRef(false);
-  const onInitEvent = useEffectEvent((chart: echarts.ECharts) => {
-    onInit?.(chart);
-  });
+  const theme = chartTheme(useGameTheme()?.theme);
+  const onInitEvent = useEffectEvent((chart: echarts.ECharts) => onInit?.(chart));
 
   const visibleRef = useRef(!mergeUpdates);
-  const appliedRef = useRef<EChartsOption | null>(null);
-  const lastUpdateRef = useRef<{ option: EChartsOption; at: number } | null>(null);
+  const appliedRef = useRef<EChartProps["option"] | null>(null);
+  const lastUpdateRef = useRef<{ option: EChartProps["option"]; at: number } | null>(null);
   const applyOptionRef = useRef<(() => void) | undefined>(undefined);
   const applyOption = useEffectEvent(() => {
     const chart = chartRef.current;
@@ -218,7 +219,8 @@ export const EChart = memo(function EChart({
       lastUpdateRef.current == null
         ? CHART_UPDATE_DURATION
         : Math.min(CHART_UPDATE_DURATION, (now - lastUpdateRef.current.at) * 0.8);
-    const next = mergeUpdates ? animatedOption(option, duration) : option;
+    const resolved = typeof option === "function" ? option(chart) : option;
+    const next = mergeUpdates ? animatedOption(resolved, duration) : resolved;
     if (gpuBars && !barsFailed.current && !barsRef.current && supportsGpuBars(next)) {
       barsRef.current = createGpuBars(chart, () => {
         barsRef.current?.dispose();
@@ -259,6 +261,7 @@ export const EChart = memo(function EChart({
     const container = containerRef.current;
     if (!container) return;
     let rafId: number | undefined;
+    let cleanup: (() => void) | void;
     let size = { width: 0, height: 0 };
     const resize = () => {
       const chart = chartRef.current;
@@ -275,7 +278,7 @@ export const EChart = memo(function EChart({
       if (!chartRef.current) {
         // Dirty-rectangle painting clears strips of filled line series when
         // axis-pointer hover markers move. Repaint the canvas as a whole.
-        const chart = echarts.init(container);
+        const chart = echarts.init(container, theme);
         chartRef.current = chart;
         if (gpuScatter) {
           gpuRef.current = createGpuScatter(chart, () => {
@@ -300,7 +303,7 @@ export const EChart = memo(function EChart({
           };
         }
         size = { width: container.clientWidth, height: container.clientHeight };
-        onInitEvent(chart);
+        cleanup = onInitEvent(chart);
       } else {
         resize();
       }
@@ -346,12 +349,13 @@ export const EChart = memo(function EChart({
       barsFailed.current = false;
       gpuRef.current?.dispose();
       gpuRef.current = undefined;
+      cleanup?.();
       chartRef.current?.dispose();
       chartRef.current = null;
       appliedRef.current = null;
       lastUpdateRef.current = null;
     };
-  }, [mergeUpdates, gpuScatter, gpuBars]);
+  }, [mergeUpdates, gpuScatter, gpuBars, theme]);
 
   useEffect(() => {
     applyOption();
